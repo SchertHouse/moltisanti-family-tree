@@ -33,7 +33,7 @@ Aspettati drammi, leggende e un po’ di lavoro da detective genealogico 🔍�
 
 ## ⚠️ Avviso
 
-Nessun membro della famiglia è stato danneggiato per la creazione di questo albero 🌳 — ma qualche ego potrebbe essersi ferito a causa del mancato censimento in albero (se non sei nell'albero ti vogliamo lo stesso bene)... 😉
+Nessun membro della famiglia è stato danneggiato per la creazione di questo albero 🌳 — ma qualche ego potrebbe essersi ferito a causa di un mancato censimento (se non sei nell'albero ti vogliamo bene lo stesso)... 😉
 
 ---
 
@@ -43,7 +43,7 @@ Creato con amore ❤️ dallo squad di genealogisti Moltisanti!
 
 ---
 
-> _"Le famiglie sono come rami di un albero. Cresciamo in direzioni diverse, ma le nostre radici restano una sola."_ 🌳✨
+> _"Le famiglie sono come rami di un albero. Crescono in direzioni diverse, ma le loro radici....anche...bisogna trovare una frase saggia migliore 🤣"_ 🌳✨
 
 ---
 
