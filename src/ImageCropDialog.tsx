@@ -31,9 +31,25 @@ export default function ImageCropDialog({ file, t, onCancel, onComplete }: Props
   const drag = useRef<{ pointerId: number; x: number; y: number; cropX: number; cropY: number } | null>(null)
 
   useEffect(() => {
-    const url = URL.createObjectURL(file)
-    setSource(url)
-    return () => URL.revokeObjectURL(url)
+    let active = true
+    let url: string | null = null
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (!active) return
+      if (!(reader.result instanceof ArrayBuffer)) {
+        setError('file-read')
+        return
+      }
+      url = URL.createObjectURL(new Blob([reader.result], { type: file.type }))
+      setSource(url)
+    }
+    reader.onerror = () => { if (active) setError('file-read') }
+    reader.readAsArrayBuffer(file)
+    return () => {
+      active = false
+      reader.abort()
+      if (url) URL.revokeObjectURL(url)
+    }
   }, [file])
 
   const measureImage = () => {
@@ -179,7 +195,7 @@ export default function ImageCropDialog({ file, t, onCancel, onComplete }: Props
           onChange={(event) => resizeSquare(Number(event.target.value))} disabled={!crop || !dimensions} />
       </label>
       {crop && <p className="crop-pixel-size">{t('cropOutputSize', { size: cropPixels })}</p>}
-      {error && <p className="crop-error" role="alert">{error}</p>}
+      {error && <p className="crop-error" role="alert">{error === 'file-read' ? t('photoReadFailure') : error}</p>}
       <div className="modal-actions">
         <button type="button" className="button button-light" disabled={processing} onClick={onCancel}>{t('cancel')}</button>
         <button type="button" className="button button-primary" disabled={!crop || !dimensions || processing} onClick={completeCrop}>

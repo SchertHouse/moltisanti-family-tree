@@ -69,7 +69,7 @@
   "githubBranch": "Branch",
   "githubPath": "Archive path",
   "githubToken": "Fine-grained token (memory only)",
-  "savedDataWarning": "The passphrase is not saved; keep it separately.",
+  "savedDataWarning": "Enter the archive passphrase. You can choose to remember it encrypted on this device.",
   "generationAll": "All",
   "error": "Notice",
   "editPerson": "Edit person",
@@ -103,7 +103,7 @@
   "greetingEmail": "Hi {name}, happy birthday!",
   "greetingWhatsApp": "Hi {name}, happy birthday!",
   "archiveTooLarge": "The archive exceeds the 25 MB limit.",
-  "passphraseGuidance": "Use a passphrase of at least 12 characters. It is not saved.",
+  "passphraseGuidance": "Use a passphrase of at least 12 characters. Remembering it on this device is optional.",
   "exportPlain": "Export plaintext JSON",
   "importPlain": "Import JSON",
   "plainExportWarning": "The export contains unencrypted personal data and photos. Keep it secure. Continue?",
@@ -137,5 +137,10 @@
   "imageCacheCleared": "Local image cache cleared.",
   "imageCacheMemoryOnly": "The persistent image cache is unavailable or full; this session will use a temporary cache.",
   "imageCacheClearFailure": "Could not clear the image cache.",
-  "photoVariantFailure": "Could not display this photo:"
+  "photoVariantFailure": "Could not display this photo:",
+  "rememberPassphrase": "Remember on this device (encrypted key)",
+  "forgetRememberedKey": "Forget saved key",
+  "rememberedKeyFailed": "The saved key could not open the archive. Enter the updated passphrase.",
+  "rememberedKeyUnavailable": "Protected storage is unavailable; you can still enter the passphrase manually.",
+  "rememberedKeyForgotten": "Saved key removed from this device."
 }

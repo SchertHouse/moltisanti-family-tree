@@ -69,7 +69,7 @@
   "githubBranch": "Branĉo",
   "githubPath": "Arkiva vojo",
   "githubToken": "Detala ĵetono (nur memoro)",
-  "savedDataWarning": "La pasfrazo ne estas konservata; konservu ĝin aparte.",
+  "savedDataWarning": "Enigu la arkivan pasfrazon. Vi povas elekti memori ĝin ĉifrite en ĉi tiu aparato.",
   "generationAll": "Ĉiuj",
   "error": "Atento",
   "editPerson": "Redakti personon",
@@ -103,7 +103,7 @@
   "greetingEmail": "Saluton {name}, feliĉan naskiĝtagon!",
   "greetingWhatsApp": "Saluton {name}, feliĉan naskiĝtagon!",
   "archiveTooLarge": "La arkivo superas la limon de 25 MB.",
-  "passphraseGuidance": "Uzu pasfrazon de almenaŭ 12 signoj. Ĝi ne estas konservata.",
+  "passphraseGuidance": "Uzu pasfrazon de almenaŭ 12 signoj. Memori ĝin en ĉi tiu aparato estas nedeviga.",
   "exportPlain": "Eksporti simplan JSON",
   "importPlain": "Importi JSON",
   "plainExportWarning": "La eksportita dosiero enhavas neĉifritajn personajn datumojn kaj fotojn. Sekure konservu ĝin. Daŭrigi?",
@@ -137,5 +137,10 @@
   "imageCacheCleared": "Loka bilda kaŝmemoro forviŝita.",
   "imageCacheMemoryOnly": "La daŭra bilda kaŝmemoro ne disponeblas aŭ estas plena; ĉi tiu seanco uzos provizoran kaŝmemoron.",
   "imageCacheClearFailure": "Ne eblis forviŝi la bildan kaŝmemoron.",
-  "photoVariantFailure": "Ne eblis montri ĉi tiun foton:"
+  "photoVariantFailure": "Ne eblis montri ĉi tiun foton:",
+  "rememberPassphrase": "Memori en ĉi tiu aparato (ĉifrita ŝlosilo)",
+  "forgetRememberedKey": "Forgesi konservitan ŝlosilon",
+  "rememberedKeyFailed": "La konservita ŝlosilo ne malfermis la arkivon. Enigu la ĝisdatigitan pasfrazon.",
+  "rememberedKeyUnavailable": "Protektita konservado ne disponeblas; vi tamen povas mane enigi la pasfrazon.",
+  "rememberedKeyForgotten": "Konservita ŝlosilo forigita de ĉi tiu aparato."
 }

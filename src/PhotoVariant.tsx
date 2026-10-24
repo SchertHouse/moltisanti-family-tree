@@ -10,6 +10,12 @@ interface PhotoProps {
   onError: (message: string) => void
 }
 
+interface PhotoState {
+  identity: string
+  url: string | null
+  loading: boolean
+}
+
 function usePhotoUrl(
   { personId, source, passphrase, onError }: PhotoProps,
   size: number,
@@ -17,33 +23,32 @@ function usePhotoUrl(
   elementRef: RefObject<Element | null>,
   lazy: boolean,
 ): { url: string | null; loading: boolean } {
-  const [url, setUrl] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const identity = JSON.stringify([personId, source, passphrase, size, priority, lazy])
+  const [photo, setPhoto] = useState<PhotoState>({ identity: '', url: null, loading: false })
   const errorHandler = useRef(onError)
-  errorHandler.current = onError
+
+  useEffect(() => {
+    errorHandler.current = onError
+  }, [onError])
 
   useEffect(() => {
     let active = true
     let objectUrl: string | null = null
-    setUrl(null)
-    setLoading(false)
     const clearActiveUrl = () => {
       if (objectUrl) URL.revokeObjectURL(objectUrl)
       objectUrl = null
-      setUrl(null)
-      setLoading(false)
+      setPhoto({ identity, url: null, loading: false })
     }
     window.addEventListener('image-cache-cleared', clearActiveUrl)
     const load = () => {
-      setLoading(true)
+      setPhoto({ identity, url: null, loading: true })
       void getImageVariant(personId, source, size, passphrase, priority).then((dataUrl) => {
         if (!active) return
         objectUrl = URL.createObjectURL(imageDataUrlToBlob(dataUrl))
-        setUrl(objectUrl)
-        setLoading(false)
+        setPhoto({ identity, url: objectUrl, loading: false })
       }).catch((error: unknown) => {
         if (active) {
-          setLoading(false)
+          setPhoto({ identity, url: null, loading: false })
           errorHandler.current(error instanceof Error ? error.message : 'Impossibile elaborare la fotografia.')
         }
       })
@@ -72,9 +77,11 @@ function usePhotoUrl(
       window.removeEventListener('image-cache-cleared', clearActiveUrl)
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [personId, source, passphrase, size, priority, elementRef, lazy])
+  }, [personId, source, passphrase, size, priority, elementRef, lazy, identity])
 
-  return { url, loading }
+  return photo.identity === identity
+    ? { url: photo.url, loading: photo.loading }
+    : { url: null, loading: false }
 }
 
 export function TreePhoto({ personId, source, passphrase, onError }: PhotoProps) {

@@ -58,7 +58,7 @@ describe('square image crop dialog', () => {
       onComplete={onComplete}
     />)
 
-    fireEvent.load(screen.getByRole('img', { name: 'Photo crop preview' }))
+    fireEvent.load(await screen.findByRole('img', { name: 'Photo crop preview' }))
     const cropSelection = screen.getByRole('group', { name: 'Square crop selection' })
     expect(cropSelection.closest('.crop-backdrop')?.parentElement).toBe(document.body)
     expect(screen.getByRole('dialog', { name: 'Crop photo' })).toBeInTheDocument()

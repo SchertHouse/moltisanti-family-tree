@@ -13,10 +13,12 @@ import ImageCropDialog from './ImageCropDialog'
 import imageConfig from '../image-config.json'
 import { clearImageCache } from './imageVariants'
 import { ProfilePhoto, TreePhoto } from './PhotoVariant'
+import { clearRememberedPassphrase, getRememberedPassphrase, saveRememberedPassphrase } from './rememberedKey'
 import { browserLanguage, translate, type Language } from './i18n'
+import { dateInputPattern, formatCalendarDate, formatDate, formatDateInput, parseDateInput } from './dateInput'
 import {
   birthdayInfo, emptyArchive, generationMap, relationTo, treePositions, validateArchive,
-  type FamilyArchive, type Person, type RelationshipType,
+  uniquePeople, type FamilyArchive, type Person, type RelationshipType,
 } from './model'
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'moltisantitree'
@@ -29,11 +31,14 @@ type BusyAction = 'saving' | 'publishing' | 'exporting' | 'opening' | 'importing
 
 function App() {
   const [language, setLanguage] = useState<Language>(browserLanguage)
+  const languageRef = useRef(language)
   const t = (key: Parameters<typeof translate>[1], values?: Record<string, string | number>) => translate(language, key, values)
   const [archive, setArchive] = useState<FamilyArchive>(emptyArchive)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [admin, setAdmin] = useState(false)
   const [passphrase, setPassphrase] = useState('')
+  const [rememberPassphrase, setRememberPassphrase] = useState(false)
+  const [rememberedKeyAvailable, setRememberedKeyAvailable] = useState(false)
   const [modal, setModal] = useState<Modal>(null)
   const [keyPurpose, setKeyPurpose] = useState<'open' | 'save'>('save')
   const [replaceKey, setReplaceKey] = useState(false)
@@ -67,36 +72,12 @@ function App() {
     window.addEventListener('image-cache-fallback', notifyFallback)
     return () => window.removeEventListener('image-cache-fallback', notifyFallback)
   }, [language])
-
   useEffect(() => {
-    const controller = new AbortController()
-    const archiveUrl = `${import.meta.env.BASE_URL}family-archive.enc.json?v=${Date.now()}`
-    fetch(archiveUrl, { cache: 'no-store', signal: controller.signal })
-      .then(async (response) => {
-        if (response.status === 404) return null
-        if (!response.ok) throw new Error(`Archivio pubblicato non disponibile (HTTP ${response.status}).`)
-        if (response.headers.get('content-type')?.includes('text/html')) return null
-        const text = await response.text()
-        if (text.length > 35 * 1024 * 1024) throw new Error('Archivio troppo grande per essere aperto nel browser.')
-        return JSON.parse(text) as unknown
-      })
-      .then((envelope) => {
-        if (!envelope) return
-        setPendingEnvelope(envelope)
-        setKeyPurpose('open')
-        setModal('key')
-      })
-      .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === 'AbortError') return
-        setNotice(error instanceof Error ? error.message : 'Impossibile caricare l’archivio pubblicato.')
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoadingPublishedArchive(false)
-      })
-    return () => controller.abort()
-  }, [])
+    languageRef.current = language
+  }, [language])
 
   const selected = archive.people.find((person) => person.id === selectedId) ?? null
+  const upcomingBirthday = selected?.birthDate && !selected.deathDate ? birthdayInfo(selected.birthDate) : null
   const generations = useMemo(() => generationMap(archive), [archive])
   const positions = useMemo(() => treePositions(archive), [archive])
   const filtered = archive.people.filter((person) => {
@@ -352,6 +333,78 @@ function App() {
     centerTree(nextArchive)
   }
 
+  useEffect(() => {
+    const controller = new AbortController()
+    const loadPublishedArchive = async () => {
+      try {
+        const archiveUrl = `${import.meta.env.BASE_URL}family-archive.enc.json?v=${Date.now()}`
+        const response = await fetch(archiveUrl, { cache: 'no-store', signal: controller.signal })
+        if (response.status === 404 || response.headers.get('content-type')?.includes('text/html')) return
+        if (!response.ok) throw new Error(`Archivio pubblicato non disponibile (HTTP ${response.status}).`)
+        const text = await response.text()
+        if (text.length > 35 * 1024 * 1024) throw new Error('Archivio troppo grande per essere aperto nel browser.')
+        const envelope = JSON.parse(text) as unknown
+        if (controller.signal.aborted) return
+        setPendingEnvelope(envelope)
+        setKeyPurpose('open')
+
+        try {
+          const savedKey = await getRememberedPassphrase()
+          if (savedKey) {
+            setRememberedKeyAvailable(true)
+            try {
+              const result = await decryptArchive(envelope as EncryptedArchive, savedKey)
+              if (controller.signal.aborted) return
+              setPassphrase(savedKey)
+              setRememberPassphrase(true)
+              setArchive(result)
+              setSelectedId(null)
+              setPendingEnvelope(null)
+              setPendingArchive(null)
+              setPendingPassphrase('')
+              setModal(null)
+              setNotice('')
+              window.setTimeout(() => {
+                const box = canvasRef.current?.getBoundingClientRect()
+                const points = [...treePositions(result).values()]
+                if (!box || points.length === 0) return
+                const minX = Math.min(...points.map(({ x }) => x))
+                const maxX = Math.max(...points.map(({ x }) => x))
+                const minY = Math.min(...points.map(({ y }) => y))
+                const maxY = Math.max(...points.map(({ y }) => y))
+                setView((current) => ({
+                  ...current,
+                  x: box.width / 2 - ((minX + maxX) / 2) * current.scale,
+                  y: box.height / 2 - ((minY + maxY) / 2) * current.scale,
+                }))
+              }, 0)
+              return
+            } catch {
+              try {
+                await clearRememberedPassphrase()
+                setRememberedKeyAvailable(false)
+                setRememberPassphrase(false)
+              } catch {
+                setNotice(translate(languageRef.current, 'rememberedKeyUnavailable'))
+              }
+              setNotice(translate(languageRef.current, 'rememberedKeyFailed'))
+            }
+          }
+        } catch {
+          if (!controller.signal.aborted) setNotice(translate(languageRef.current, 'rememberedKeyUnavailable'))
+        }
+        if (!controller.signal.aborted) setModal('key')
+      } catch (error: unknown) {
+        if (error instanceof DOMException && error.name === 'AbortError') return
+        setNotice(error instanceof Error ? error.message : 'Impossibile caricare l’archivio pubblicato.')
+      } finally {
+        if (!controller.signal.aborted) setLoadingPublishedArchive(false)
+      }
+    }
+    void loadPublishedArchive()
+    return () => controller.abort()
+  }, [])
+
   const cancelModal = () => {
     setModal(null)
     setPendingArchive(null)
@@ -366,8 +419,10 @@ function App() {
       id: crypto.randomUUID(),
       firstName: String(data.get('firstName')).trim(),
       lastName: String(data.get('lastName')).trim(),
-      ...(data.get('birthDate') ? { birthDate: String(data.get('birthDate')) } : {}),
-      ...(data.get('deathDate') ? { deathDate: String(data.get('deathDate')) } : {}),
+      ...(parseDateInput(String(data.get('birthDate') ?? ''), language)
+        ? { birthDate: parseDateInput(String(data.get('birthDate') ?? ''), language) } : {}),
+      ...(parseDateInput(String(data.get('deathDate') ?? ''), language)
+        ? { deathDate: parseDateInput(String(data.get('deathDate') ?? ''), language) } : {}),
       ...(data.get('birthPlace') ? { birthPlace: String(data.get('birthPlace')).trim() } : {}),
       ...(data.get('biography') ? { biography: String(data.get('biography')).trim() } : {}),
       ...(data.get('email') ? { email: String(data.get('email')).trim() } : {}),
@@ -409,8 +464,8 @@ function App() {
       ...editing,
       firstName: String(data.get('firstName')).trim(),
       lastName: String(data.get('lastName')).trim(),
-      birthDate: String(data.get('birthDate') || '') || undefined,
-      deathDate: String(data.get('deathDate') || '') || undefined,
+      birthDate: parseDateInput(String(data.get('birthDate') || ''), language),
+      deathDate: parseDateInput(String(data.get('deathDate') || ''), language),
       birthPlace: String(data.get('birthPlace') || '') || undefined,
       biography: String(data.get('biography') || '') || undefined,
       email: String(data.get('email') || '') || undefined,
@@ -459,7 +514,38 @@ function App() {
   const beginKeyFlow = (purpose: 'open' | 'save') => {
     setKeyPurpose(purpose)
     setReplaceKey(false)
+    setRememberPassphrase(purpose === 'save' && rememberedKeyAvailable)
     setModal('key')
+  }
+  const persistPassphraseChoice = async (key: string, shouldRemember: boolean): Promise<string | null> => {
+    try {
+      if (shouldRemember) {
+        await saveRememberedPassphrase(key)
+        setRememberedKeyAvailable(true)
+      } else if (rememberedKeyAvailable) {
+        await clearRememberedPassphrase()
+        setRememberedKeyAvailable(false)
+      }
+      return null
+    } catch (error) {
+      return error instanceof Error ? error.message : t('rememberedKeyUnavailable')
+    }
+  }
+  const forgetRememberedPassphrase = async () => {
+    try {
+      await clearRememberedPassphrase()
+      setRememberedKeyAvailable(false)
+      setRememberPassphrase(false)
+      setNotice(t('rememberedKeyForgotten'))
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : t('rememberedKeyUnavailable'))
+    }
+  }
+  const applyPendingImport = async () => {
+    if (!pendingArchive) return
+    const storageWarning = await persistPassphraseChoice(pendingPassphrase, rememberPassphrase)
+    installArchive(pendingArchive, pendingPassphrase || undefined)
+    if (storageWarning) setNotice(storageWarning)
   }
   const selectArchiveFile = async (file: File | undefined, input: HTMLInputElement) => {
     if (!file) return
@@ -487,13 +573,14 @@ function App() {
       const prepared = await prepareArchivePhotos(archive, key, passphrase || key)
       const encrypted = await encryptPreparedArchive(prepared, key)
       await decryptArchive(encrypted, key)
+      const storageWarning = await persistPassphraseChoice(key, rememberPassphrase)
       const keyChanged = Boolean(passphrase && passphrase !== key)
       setArchive(prepared)
       setPassphrase(key)
       download(JSON.stringify(encrypted, null, 2), archivePath)
       setModal(null)
       setReplaceKey(false)
-      setNotice(keyChanged ? `${t('saved')} ${t('keyChangedNotice')}` : t('saved'))
+      setNotice(storageWarning ?? (keyChanged ? `${t('saved')} ${t('keyChangedNotice')}` : t('saved')))
     } catch (error) {
       setNotice(error instanceof Error ? error.message : t('saveFailure'))
     } finally {
@@ -578,6 +665,10 @@ function App() {
             disabled={clearingImageCache} onClick={() => {
             if (window.confirm(t('clearImageCacheConfirm'))) void clearPhotoCache()
           }}>{clearingImageCache ? <LoaderCircle className="button-spinner" size={15} /> : <Trash2 size={15} />}<span>{t('clearImageCache')}</span></button>
+          {rememberedKeyAvailable && <button className="button button-quiet remembered-key-clear" aria-label={t('forgetRememberedKey')}
+            title={t('forgetRememberedKey')} onClick={() => void forgetRememberedPassphrase()}>
+            <LockKeyhole size={15} /><span>{t('forgetRememberedKey')}</span>
+          </button>}
           {admin ? <button className="button button-admin" onClick={leaveAdmin}><ShieldCheck size={16} />{t('admin')} · <span>{t('exitAdmin')}</span></button>
             : <button className="button button-quiet" onClick={enterAdmin}><LockKeyhole size={16} />{t('admin')}</button>}
         </div>
@@ -761,13 +852,15 @@ function App() {
               {familyList(t('parents'), relationships(selected.id, 'parent-child', 'in'))}
               {familyList(t('children'), relationships(selected.id, 'parent-child', 'out'))}
               {familyList(t('partners'), relationships(selected.id, 'partner'))}
-              {familyList(t('siblings'), relationships(selected.id, 'parent-child', 'in').flatMap((parent) =>
-                relationships(parent.id, 'parent-child', 'out').filter((child) => child.id !== selected.id)))}
+              {familyList(t('siblings'), uniquePeople(relationships(selected.id, 'parent-child', 'in').flatMap((parent) =>
+                relationships(parent.id, 'parent-child', 'out').filter((child) => child.id !== selected.id))
+              ))}
               {relationships(selected.id, 'parent-child').length === 0 && relationships(selected.id, 'partner').length === 0 &&
                 <p className="muted-copy">{t('noFamilyConnections')}</p>}
             </section>
-            {selected.birthDate && !selected.deathDate && birthdayInfo(selected.birthDate) && <div className="birthday-card"><span className="birthday-icon">🎂</span>
-              <div><strong>{t('birthdayIn', { days: birthdayInfo(selected.birthDate)!.days })}</strong><small>{birthdayInfo(selected.birthDate)!.date.toLocaleDateString(language)}</small></div></div>}
+            {upcomingBirthday && <div className="birthday-card"><span className="birthday-icon">🎂</span>
+              <div><strong>{t('birthdayIn', { days: upcomingBirthday.days })}</strong>
+                <small>{formatCalendarDate(upcomingBirthday.date, language)}</small></div></div>}
             <div className="detail-body">
               <div className="detail-facts">
                 {selected.birthDate && <div><span>{t('birth')}</span><strong>{formatDate(selected.birthDate, language)}</strong></div>}
@@ -821,12 +914,20 @@ function App() {
             <p>{t('importReviewSummary', { incoming: pendingArchive.people.length, current: archive.people.length, relationships: pendingArchive.relationships.length })}</p>
             <div className="inline-warning"><ShieldCheck size={16} /> {t('importReplaceWarning')}</div>
             <div className="modal-actions"><button type="button" className="button button-light" onClick={cancelModal}>{t('cancel')}</button>
-              <button type="button" className="button button-primary" onClick={() => installArchive(pendingArchive, pendingPassphrase || undefined)}>{t('applyImport')}</button></div>
+              <button type="button" className="button button-primary" onClick={() => void applyPendingImport()}>{t('applyImport')}</button></div>
           </>}
           {modal === 'key' && <><div className="modal-symbol"><FileLock2 size={23} /></div><h2 id="modal-title">{keyPurpose === 'open' ? t('openArchive') : t('save')}</h2>
             <p>{keyPurpose === 'save' ? t('passphraseGuidance') : t('savedDataWarning')}</p>
             {keyPurpose === 'save' && passphrase && !replaceKey ? <div className="key-choice">
               <div className="inline-warning"><ShieldCheck size={16} /> {t('activeKeyInfo')}</div>
+              <div className="remember-key-option">
+                <span id="remember-key-label">{t('rememberPassphrase')}</span>
+                <button className="remember-key-switch" type="button" role="switch"
+                  aria-checked={rememberPassphrase} aria-labelledby="remember-key-label"
+                  onClick={() => setRememberPassphrase((remember) => !remember)}>
+                  <span className="remember-key-switch-track" aria-hidden="true" />
+                </button>
+              </div>
               <div className="modal-actions"><button type="button" className="button button-light" disabled={busyAction !== null} onClick={() => { setReplaceKey(true) }}>{t('newKey')}</button>
                 <button type="button" className="button button-primary" disabled={busyAction !== null} onClick={() => void saveArchive(passphrase)}>
                   {busyAction === 'saving' && <LoaderCircle className="button-spinner" size={15} />}
@@ -849,12 +950,24 @@ function App() {
                     setPendingPassphrase(key)
                     setPendingEnvelope(null)
                     setModal('import-review')
-                  } else installArchive(result, key)
+                  } else {
+                    const storageWarning = await persistPassphraseChoice(key, rememberPassphrase)
+                    installArchive(result, key)
+                    if (storageWarning) setNotice(storageWarning)
+                  }
                 } catch (error) { setNotice(error instanceof Error ? error.message : t('archiveOpenFailure')) }
                 finally { setBusyAction(null) }
               } else await saveArchive(key)
             }}><label>{t('passphrase')}<input autoFocus name="passphrase" type="password" minLength={keyPurpose === 'save' ? 12 : 1} required /></label>
               {keyPurpose === 'save' && <label>{t('passphraseConfirmation')}<input name="passphraseConfirmation" type="password" minLength={12} required /></label>}
+              <div className="remember-key-option">
+                <span id="remember-key-label">{t('rememberPassphrase')}</span>
+                <button className="remember-key-switch" type="button" role="switch"
+                  aria-checked={rememberPassphrase} aria-labelledby="remember-key-label"
+                  onClick={() => setRememberPassphrase((remember) => !remember)}>
+                  <span className="remember-key-switch-track" aria-hidden="true" />
+                </button>
+              </div>
               <div className="modal-actions"><button type="button" className="button button-light" disabled={busyAction !== null} onClick={() => setModal(null)}>{t('cancel')}</button>
                 <button className="button button-primary" disabled={busyAction !== null}>
                   {busyAction && <LoaderCircle className="button-spinner" size={15} />}
@@ -864,7 +977,7 @@ function App() {
           {modal === 'person' && <><div className="modal-symbol"><UserRoundPlus size={23} /></div><h2 id="modal-title">{editing ? t('editPerson') : t('addPerson')}</h2>
             <form className="form-stack person-form" onSubmit={editing ? onEditPerson : onAddPerson}>
               <div className="two-fields"><label>{t('firstName')}<input autoFocus name="firstName" required defaultValue={editing?.firstName} /></label><label>{t('lastName')}<input name="lastName" required defaultValue={editing?.lastName} /></label></div>
-              <div className="two-fields"><label>{t('birthDate')}<input name="birthDate" inputMode="numeric" pattern="[0-9]{4}(-[0-9]{2}(-[0-9]{2})?)?" defaultValue={editing?.birthDate} /></label><label>{t('deathDate')}<input name="deathDate" inputMode="numeric" pattern="[0-9]{4}(-[0-9]{2}(-[0-9]{2})?)?" defaultValue={editing?.deathDate} /></label></div>
+              <div className="two-fields"><label>{t('birthDate')}<input name="birthDate" inputMode="numeric" pattern={dateInputPattern(language)} placeholder={language === 'it' ? 'DD-MM-YYYY' : 'YYYY-MM-DD'} defaultValue={formatDateInput(editing?.birthDate, language)} /></label><label>{t('deathDate')}<input name="deathDate" inputMode="numeric" pattern={dateInputPattern(language)} placeholder={language === 'it' ? 'DD-MM-YYYY' : 'YYYY-MM-DD'} defaultValue={formatDateInput(editing?.deathDate, language)} /></label></div>
               <label>{t('birthPlace')}<input name="birthPlace" defaultValue={editing?.birthPlace} /></label>
               <label>{t('biography')}<textarea name="biography" rows={2} defaultValue={editing?.biography} /></label>
               <div className="two-fields"><label>{t('emailAddress')}<input name="email" type="email" defaultValue={editing?.email} /></label><label>WhatsApp<input name="whatsapp" type="tel" defaultValue={editing?.whatsapp} /></label></div>
@@ -903,14 +1016,6 @@ function App() {
       </div>}
     </main>
   )
-}
-
-function formatDate(value: string, language: Language): string {
-  const parts = value.split('-').map(Number)
-  if (parts.length === 1) return value
-  const date = new Date(parts[0]!, (parts[1] ?? 1) - 1, parts[2] ?? 1)
-  const locale = language === 'it' ? 'it-IT' : language === 'eo' ? 'eo' : 'en'
-  return new Intl.DateTimeFormat(locale, parts.length === 2 ? { year: 'numeric', month: 'long' } : { year: 'numeric', month: 'long', day: 'numeric' }).format(date)
 }
 
 export default App

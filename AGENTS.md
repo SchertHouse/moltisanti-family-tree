@@ -14,7 +14,7 @@ SPA statica React + TypeScript strict + Vite. L'archivio JSON versionato viene c
 
 ## Convenzioni e dati
 
-Usare TypeScript strict, componenti React funzionali e CSS responsive. Stato e chiavi sensibili restano in memoria; non usare storage persistente per token, passphrase o dati personali. Non loggare dati sensibili. Identificativi indipendenti dai nomi; persone e relazioni sono entità distinte. Validare gli archivi prima di usarli.
+Usare TypeScript strict, componenti React funzionali e CSS responsive. Stato e chiavi sensibili restano in memoria; non usare storage persistente per token o dati personali. La passphrase può essere conservata solo in modo opt-in come ciphertext AES-GCM con `CryptoKey` non esportabile in IndexedDB dedicato; mai in chiaro o in local/session storage. Non loggare dati sensibili. Identificativi indipendenti dai nomi; persone e relazioni sono entità distinte. Validare gli archivi prima di usarli.
 
 Il layout dell'albero deve essere deterministico: allineare partner solo quando il vincolo è compatibile con le generazioni genitore-figlio, tenere vicini i figli con lo stesso insieme di genitori e ridurre gli incroci con un riordino dei gruppi. I collegamenti familiari condividono connettori ortogonali senza alterare il modello relazionale.
 
@@ -30,7 +30,7 @@ Garantire uso da tastiera, focus visibile, etichette accessibili, controlli touc
 
 ## Sicurezza
 
-La password Admin `moltisantitree` è pubblicamente visibile nel codice e serve solo a evitare modifiche accidentali. Non è autenticazione. `VITE_ADMIN_PASSWORD` può sovrascriverla in fase di build, ma il valore risultante resta leggibile nel bundle e non va trattato come segreto. Passphrase AES e token GitHub mai in storage, URL, log o repository; cancellarli quando si esce dalla modalità Admin. Usare Web Crypto AES-GCM con IV casuale e PBKDF2 versionati. Non pubblicare dati personali in chiaro o immagini non cifrate. Token GitHub fornito dall'utente e limitato al repository. Non effettuare chiamate reali o commit nei test.
+La password Admin `moltisantitree` è pubblicamente visibile nel codice e serve solo a evitare modifiche accidentali. Non è autenticazione. `VITE_ADMIN_PASSWORD` può sovrascriverla in fase di build, ma il valore risultante resta leggibile nel bundle e non va trattato come segreto. Token GitHub mai in storage, URL, log o repository. Passphrase AES in memoria, salvo consenso esplicito per il ricordo cifrato descritto in `docs/security.md`; rimuoverla dallo storage quando l'utente la dimentica o non apre più l'archivio. Usare Web Crypto AES-GCM con IV casuale e PBKDF2 versionati. Non pubblicare dati personali in chiaro o immagini non cifrate. Token GitHub fornito dall'utente e limitato al repository. Non effettuare chiamate reali o commit nei test.
 
 ## Verifica e documentazione
 

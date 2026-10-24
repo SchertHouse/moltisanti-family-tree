@@ -1,12 +1,17 @@
+import 'fake-indexeddb/auto'
 import { act, cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import * as cryptoModule from './crypto'
+import type { FamilyArchive } from './model'
+import { clearRememberedPassphrase, getRememberedPassphrase, saveRememberedPassphrase } from './rememberedKey'
 
 describe('family tree interface', () => {
-  afterEach(() => {
+  afterEach(async () => {
     cleanup()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+    await clearRememberedPassphrase()
   })
 
   it('fetches the published archive without reusing a stale cached copy', async () => {
@@ -19,6 +24,72 @@ describe('family tree interface', () => {
     const [url, options] = fetchMock.mock.calls[0]!
     expect(url).toMatch(/family-archive\.enc\.json\?v=\d+$/)
     expect(options).toMatchObject({ cache: 'no-store' })
+  })
+
+  it('opens the published archive automatically with a remembered passphrase', async () => {
+    const key = 'remembered family key'
+    const archive: FamilyArchive = {
+      schemaVersion: 1,
+      people: [{ id: 'remembered-person', firstName: 'Ada', lastName: 'Lovelace' }],
+      relationships: [],
+    }
+    vi.spyOn(cryptoModule, 'decryptArchive').mockResolvedValue(archive)
+    await saveRememberedPassphrase(key)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ format: 'test-envelope' }))))
+
+    render(<App />)
+
+    expect(await screen.findByRole('button', { name: 'Ada Lovelace' })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Open encrypted archive' })).not.toBeInTheDocument()
+  })
+
+  it('falls back to the passphrase prompt when the remembered key cannot open the archive', async () => {
+    vi.spyOn(cryptoModule, 'decryptArchive').mockRejectedValue(new Error('Invalid key'))
+    await saveRememberedPassphrase('stale remembered key')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ format: 'test-envelope' }))))
+
+    render(<App />)
+
+    expect(await screen.findByRole('dialog', { name: 'Open encrypted archive' })).toBeInTheDocument()
+    expect(await getRememberedPassphrase()).toBeNull()
+    expect(screen.getByRole('status')).toHaveTextContent('The saved key could not open the archive')
+  })
+
+  it('remembers a passphrase only when the user opts in during opening', async () => {
+    const archive: FamilyArchive = {
+      schemaVersion: 1,
+      people: [{ id: 'opt-in-person', firstName: 'Cora', lastName: 'Lovelace' }],
+      relationships: [],
+    }
+    vi.spyOn(cryptoModule, 'decryptArchive').mockResolvedValue(archive)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ format: 'test-envelope' }))))
+
+    render(<App />)
+
+    fireEvent.change(await screen.findByLabelText('Encryption passphrase'), { target: { value: 'entered by user' } })
+    fireEvent.click(screen.getByRole('switch', { name: 'Remember on this device (encrypted key)' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    expect(await screen.findByRole('button', { name: 'Cora Lovelace' })).toBeInTheDocument()
+    expect(await getRememberedPassphrase()).toBe('entered by user')
+  })
+
+  it('accepts Italian DD-MM-YYYY dates and displays them in the same format', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 404 })))
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<App />)
+
+    fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'it' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Admin' }))
+    fireEvent.change(screen.getByLabelText('Password Admin locale'), { target: { value: 'moltisantitree' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Conferma' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Aggiungi persona' }))
+    fireEvent.change(screen.getByLabelText('Nome'), { target: { value: 'Ada' } })
+    fireEvent.change(screen.getByLabelText('Cognome'), { target: { value: 'Lovelace' } })
+    fireEvent.change(screen.getByLabelText('Data di nascita (DD-MM-YYYY)'), { target: { value: '29-02-2000' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Aggiungi' }))
+
+    expect(await screen.findByText('29-02-2000')).toBeInTheDocument()
   })
 
   it('lets an admin create and inspect a person without persisting the archive', async () => {

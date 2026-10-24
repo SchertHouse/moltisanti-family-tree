@@ -2,7 +2,11 @@
 
 ## Protezioni
 
-L'intero archivio viene cifrato in browser con Web Crypto AES-256-GCM. Ogni cifratura genera IV casuale e salt; PBKDF2-SHA-256 (310.000 iterazioni) deriva la chiave da una passphrase di almeno 12 caratteri, distinta dalla password Admin. L'envelope è versionato e autenticato. L'archivio è limitato a 25 MB. La passphrase e il token GitHub risiedono soltanto in memoria volatile e vengono rimossi all'uscita da Admin/ricaricamento.
+L'intero archivio viene cifrato in browser con Web Crypto AES-256-GCM. Ogni cifratura genera IV casuale e salt; PBKDF2-SHA-256 (310.000 iterazioni) deriva la chiave da una passphrase di almeno 12 caratteri, distinta dalla password Admin. L'envelope è versionato e autenticato. L'archivio è limitato a 25 MB. La passphrase e il token GitHub restano in memoria volatile; la passphrase può essere salvata solo con consenso esplicito.
+
+Se l'utente seleziona “Ricorda su questo dispositivo”, la passphrase viene cifrata con AES-GCM usando una chiave Web Crypto non esportabile, generata appositamente e conservata come `CryptoKey` in un database IndexedDB separato dalla cache immagini. In IndexedDB non viene salvata la passphrase in chiaro. All'avvio l'app tenta l'apertura con la credenziale ricordata; se manca o non apre l'archivio, la credenziale non valida viene rimossa quando possibile e viene richiesto l'inserimento manuale. La chiave si può eliminare con “Dimentica chiave salvata”; uscire dalla modalità Admin non la rimuove. In caso di indisponibilità dello storage l'apertura manuale resta possibile.
+
+La chiave e il ciphertext sono entrambi nel profilo locale del browser: questa scelta riduce l'esposizione accidentale dei dati memorizzati in chiaro, ma non è un keychain del sistema operativo e non protegge da malware, accesso al profilo/browser sbloccato o codice malevolo servito dalla stessa origine. Non ricordare la chiave su dispositivi condivisi o non fidati. Il token GitHub non viene mai memorizzato.
 
 ## Immagini e cache
 
@@ -16,7 +20,7 @@ Le varianti (albero 128 × 128, profilo massimo 800 × 800) sono generate solo o
 
 Le bitmap e gli URL temporanei vengono rilasciati dopo l'elaborazione/visualizzazione. L'archivio non viene salvato o pubblicato se la preparazione o la verifica di una delle immagini fallisce. L'export JSON in chiaro decifra anche le foto protette solo dopo conferma e con la passphrase valida; il file esportato è quindi interamente sensibile e non va pubblicato.
 
-La password iniziale `moltisantitree` è nel bundle pubblico e modificabile: deterrente per modifiche accidentali, non autenticazione. `VITE_ADMIN_PASSWORD` può sovrascriverla a build time, ma il valore finale resta visibile nel bundle e non è un segreto. La passphrase di cifratura non è memorizzata né distribuita.
+La password iniziale `moltisantitree` è nel bundle pubblico e modificabile: deterrente per modifiche accidentali, non autenticazione. `VITE_ADMIN_PASSWORD` può sovrascriverla a build time, ma il valore finale resta visibile nel bundle e non è un segreto. La passphrase di cifratura non viene mai memorizzata in chiaro né distribuita.
 
 ## GitHub
 

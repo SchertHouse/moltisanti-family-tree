@@ -16,6 +16,10 @@ export interface Person {
   sources?: string
 }
 
+export function uniquePeople(people: Person[]): Person[] {
+  return [...new Map(people.map((person) => [person.id, person])).values()]
+}
+
 export interface Relationship {
   id: string
   type: RelationshipType

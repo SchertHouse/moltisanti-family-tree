@@ -6,4 +6,6 @@ Usare componenti piccoli e TypeScript strict; niente stringhe UI nei componenti 
 
 Il ritaglio quadrato, orientamento EXIF, rimozione metadati e normalizzazione restano nel browser. Testare geometria, risoluzione, output e migrazione/cifratura per immagine. Le varianti vanno generate on demand, cifrate prima di IndexedDB e riutilizzate solo con passphrase valida; mantenere una cache temporanea limitata per i browser senza IndexedDB. Testare invalidazione delle chiavi al cambio sorgente, errori di decifratura e fallback cache. Rilasciare bitmap e URL temporanei.
 
+Il ricordo della passphrase è opt-in: conservarla solo come ciphertext AES-GCM con `CryptoKey` non esportabile in IndexedDB dedicato, mai in local/session storage o in chiaro. La cache immagini e lo store delle credenziali devono restare separati. Testare roundtrip, ciphertext privo di passphrase in chiaro, rimozione, fallback a inserimento manuale e apertura automatica.
+
 Non usare dati reali nei test. Nessuna chiamata API esterna o commit nei test. Le traduzioni devono avere set di chiavi coerente in `it`, `en`, `eo`.

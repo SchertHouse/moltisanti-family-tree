@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { birthdayInfo, emptyArchive, generationMap, treePositions, validateArchive } from './model'
+import { birthdayInfo, emptyArchive, generationMap, treePositions, uniquePeople, validateArchive } from './model'
 
 describe('family archive validation', () => {
+  it('deduplicates people by ID and preserves their first-seen order', () => {
+    const first = { id: 'first', firstName: 'Sara', lastName: 'Family' }
+    const second = { id: 'second', firstName: 'Elisabetta', lastName: 'Family' }
+
+    expect(uniquePeople([first, second, first])).toEqual([first, second])
+  })
+
   it('accepts an empty archive and rejects duplicate people', () => {
     expect(() => validateArchive(emptyArchive())).not.toThrow()
     const person = { id: 'a', firstName: 'Ada', lastName: 'Test' }
