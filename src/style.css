@@ -67,7 +67,7 @@ h1 { font: 800 30px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; letter-spacin
 .search-results p { color: #92978c; font-size: 10px; padding: 6px; }
 .generation-select { border: 1px solid #ecece5; padding: 0 9px; border-radius: 9px; height: 37px; }
 .generation-select select { font-size: 11px; }
-.tree-stage { min-height: 520px; position: relative; flex: 1; overflow: hidden; background-color: #fffefa; background-image: radial-gradient(#d8dfd5 0.75px, transparent 0.75px); background-size: 22px 22px; }
+.tree-stage { min-height: 520px; position: relative; flex: 1; overflow: hidden; overscroll-behavior: contain; background-color: #fffefa; background-image: radial-gradient(#d8dfd5 0.75px, transparent 0.75px); background-size: 22px 22px; }
 .tree-canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; }
 .tree-canvas:active { cursor: grabbing; }
 .family-line { fill: none; stroke: #b8c9b6; stroke-width: 2; }
@@ -78,6 +78,9 @@ h1 { font: 800 30px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; letter-spacin
 .person-node:hover rect { stroke: #9caf98; }
 .person-node.selected rect { stroke: #5b805f; stroke-width: 2.5; }
 .person-node.dimmed { opacity: .36; }
+.node-edit-button { cursor: pointer; color: #416c51; }
+.node-edit-button circle { fill: #fffefa; stroke: #dce5d8; stroke-width: 1.2; filter: drop-shadow(0 2px 3px rgba(39,56,40,.16)); }
+.node-edit-button:hover circle, .node-edit-button:focus circle { fill: #e8efe8; stroke: #769274; }
 .node-avatar { fill: #e9efe5; }
 .avatar-initial { font: 700 11px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; fill: #547353; }
 .node-name { font: 600 11px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; fill: #3f4d40; }
@@ -108,6 +111,7 @@ h1 { font: 800 30px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; letter-spacin
 .tree-footer { display: flex; justify-content: space-between; align-items: center; padding: 11px 17px; border-top: 1px solid #f0efe9; color: #90958a; font-size: 10px; }
 .tree-footer > span { display: inline-flex; align-items: center; gap: 7px; }
 .detail-panel { position: relative; min-height: 615px; }
+.detail-panel.has-selection { max-height: min(75vh, 760px); overflow-y: auto; overscroll-behavior: contain; }
 .detail-empty { height: 100%; min-height: 615px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 30px; }
 .detail-empty-icon { color: #a1b19b; background: #eff3ec; width: 54px; height: 54px; display: grid; place-items: center; border-radius: 18px; }
 .detail-empty h3 { font: 700 14px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; margin: 15px 0 6px; }
@@ -116,9 +120,11 @@ h1 { font: 800 30px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; letter-spacin
 .profile-hero { padding: 27px 23px 19px; display: flex; gap: 13px; align-items: center; background: linear-gradient(130deg, #f5f5ee, #edf3eb); }
 .profile-avatar { width: 64px; height: 64px; flex: 0 0 64px; border: 3px solid white; box-shadow: 0 4px 12px #31412c18; border-radius: 22px; display: grid; place-items: center; overflow: hidden; background: #dce8d9; color: #527153; font: 700 18px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; }
 .profile-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.profile-identity { flex: 1; min-width: 0; }
 .profile-label { color: #81937d; font-size: 8px; letter-spacing: .9px; font-weight: 700; }
-.profile-hero h2 { font: 700 17px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; margin: 5px 0 3px; letter-spacing: -.4px; }
+.profile-hero h2 { font: 700 17px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; margin: 5px 0 3px; letter-spacing: -.4px; overflow-wrap: anywhere; }
 .profile-hero p { margin: 0; color: #80877b; font-size: 10px; }
+.profile-edit { flex: 0 0 auto; padding: 8px 9px; font-size: 10px; white-space: nowrap; }
 .birthday-card { display: flex; align-items: center; gap: 10px; margin: 14px 17px 0; padding: 10px 12px; border: 1px solid #f1e5d7; border-radius: 11px; background: #fffaf4; }
 .birthday-icon { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: #f7e9d9; }
 .birthday-card strong, .birthday-card small { display: block; }
@@ -132,7 +138,7 @@ h1 { font: 800 30px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; letter-spacin
 .bio-block { padding: 14px 0; border-bottom: 1px solid #eeeee8; }
 .bio-block h3, .family-block > h3 { display: flex; align-items: center; gap: 7px; color: #596755; font: 700 10px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; margin: 0 0 8px; }
 .bio-block p { margin: 0; color: #7e8479; font-size: 10px; line-height: 1.7; white-space: pre-wrap; }
-.family-block { padding-top: 15px; }
+.family-block { padding: 15px 19px 4px; border-bottom: 1px solid #eeeee8; }
 .family-block > h3 { color: #596755; font-size: 11px; margin-bottom: 13px; }
 .family-list { margin: 0 0 12px; }
 .family-list h3 { color: #95998f; font-size: 9px; font-weight: 600; margin: 0 0 6px; }
@@ -194,6 +200,8 @@ h1 { font: 800 30px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; letter-spacin
   .app-shell { padding: 0 24px 28px; }
   .workspace { grid-template-columns: minmax(0, 1fr) 294px; gap: 13px; }
   .profile-hero { padding-left: 17px; padding-right: 17px; }
+  .profile-edit { width: 34px; padding: 8px; font-size: 0; }
+  .profile-edit svg { flex: 0 0 auto; }
   .detail-body { padding-left: 16px; padding-right: 16px; }
 }
 @media (max-width: 760px) {
@@ -216,12 +224,13 @@ h1 { font: 800 30px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; letter-spacin
   .tree-area { min-height: 480px; }
   .tree-stage { min-height: 410px; }
   .detail-panel { min-height: unset; }
+  .detail-panel.has-selection { max-height: none; overflow: visible; }
   .detail-empty { min-height: 135px; }
   .detail-empty-icon { width: 42px; height: 42px; border-radius: 14px; }
   .detail-empty h3 { margin-top: 9px; }
   .detail-empty p { margin: 0; }
-  .detail-panel.has-selection { overflow: visible; }
   .profile-hero { padding: 22px 20px 17px; }
+  .profile-edit { width: auto; padding: 8px 9px; font-size: 10px; }
   .detail-body { padding: 15px 19px 21px; }
   .tree-footer { padding: 9px 12px; }
   .admin-dock { align-items: flex-start; flex-direction: column; }
@@ -251,6 +260,7 @@ h1 { font: 800 30px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; letter-spacin
   .tree-footer > span { gap: 5px; }
   .modal-card { padding: 22px 18px; }
   .two-fields { grid-template-columns: 1fr; }
+  .profile-edit { width: 34px; padding: 8px; font-size: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }

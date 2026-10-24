@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent, type WheelEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent } from 'react'
 import {
   BookOpen, Check, ChevronDown, CircleHelp, Download, FileLock2, Heart,
-  Languages, LockKeyhole, Mail, Maximize2, Minus, MousePointer2, Plus, Search, ShieldCheck,
+  Languages, LockKeyhole, Mail, Maximize2, Minus, MousePointer2, Pencil, Plus, Search, ShieldCheck,
   Sparkles, Trash2, Upload, UserRoundPlus, Users, X,
 } from 'lucide-react'
 import {
@@ -49,6 +49,7 @@ function App() {
   const cacheFallbackNotified = useRef(false)
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 1 })
   const canvasRef = useRef<SVGSVGElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
   const drag = useRef<{ x: number; y: number; viewX: number; viewY: number } | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   const pinch = useRef<{ distance: number; scale: number; worldX: number; worldY: number } | null>(null)
@@ -194,19 +195,43 @@ function App() {
     setSelectedId(id)
   }
 
-  const handleWheel = (event: WheelEvent<SVGSVGElement>) => {
+  const editSelected = () => {
+    if (!selected) return
+    setEditing(selected)
+    setCroppedPhoto(null)
+    setModal('person')
+  }
+
+  const editPerson = (person: Person) => {
+    setSelectedId(person.id)
+    setEditing(person)
+    setCroppedPhoto(null)
+    setModal('person')
+  }
+
+  const handleWheel = useCallback((event: globalThis.WheelEvent) => {
     event.preventDefault()
-    const rect = event.currentTarget.getBoundingClientRect()
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return
     const factor = event.deltaY < 0 ? 1.1 : 0.9
-    const scale = Math.max(0.4, Math.min(2.2, view.scale * factor))
     const px = event.clientX - rect.left
     const py = event.clientY - rect.top
-    setView({
-      x: px - (px - view.x) * (scale / view.scale),
-      y: py - (py - view.y) * (scale / view.scale),
-      scale,
+    setView((current) => {
+      const scale = Math.max(0.4, Math.min(2.2, current.scale * factor))
+      return {
+        x: px - (px - current.x) * (scale / current.scale),
+        y: py - (py - current.y) * (scale / current.scale),
+        scale,
+      }
     })
-  }
+  }, [])
+
+  useEffect(() => {
+    const stage = stageRef.current
+    if (!stage || archive.people.length === 0) return
+    stage.addEventListener('wheel', handleWheel, { passive: false })
+    return () => stage.removeEventListener('wheel', handleWheel)
+  }, [archive.people.length, handleWheel])
 
   const startDrag = (event: PointerEvent<SVGSVGElement>) => {
     if (event.button !== 0) return
@@ -242,12 +267,14 @@ function App() {
       setView({ x: centerX - pinch.current.worldX * scale, y: centerY - pinch.current.worldY * scale, scale })
       return
     }
-    if (!drag.current) return
-    if (Math.hypot(event.clientX - drag.current.x, event.clientY - drag.current.y) > 4) suppressClick.current = true
+    const currentDrag = drag.current
+    if (!currentDrag) return
+    if (Math.hypot(event.clientX - currentDrag.x, event.clientY - currentDrag.y) <= 4) return
+    suppressClick.current = true
     setView((current) => ({
       ...current,
-      x: drag.current!.viewX + event.clientX - drag.current!.x,
-      y: drag.current!.viewY + event.clientY - drag.current!.y,
+      x: currentDrag.viewX + event.clientX - currentDrag.x,
+      y: currentDrag.viewY + event.clientY - currentDrag.y,
     }))
   }
   const endDrag = (event: PointerEvent<SVGSVGElement>) => {
@@ -549,7 +576,7 @@ function App() {
               </select><ChevronDown size={14} />
             </label>
           </div>
-          <div className="tree-stage">
+          <div className="tree-stage" ref={stageRef}>
             {archive.people.length === 0 ? <div className="empty-state">
               <div className="empty-illustration"><span /><span /><span /><Heart size={28} /></div>
               <h2>{t('emptyTitle')}</h2><p>{t('emptyText')}</p>
@@ -564,7 +591,7 @@ function App() {
               {admin && <p className="empty-hint">{t('adminHint')}</p>}
             </div> : <>
               <svg ref={canvasRef} className="tree-canvas" role="group" aria-label={`${t('brand')} — ${archive.people.length} persone`}
-                onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} onWheel={handleWheel}>
+                onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
                 <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
                   {archive.relationships.map((relationship) => {
                     const from = positions.get(relationship.from)
@@ -583,22 +610,40 @@ function App() {
                     const active = selectedId === person.id
                     const connected = relatedIds.has(person.id)
                     const years = [person.birthDate?.slice(0, 4), person.deathDate?.slice(0, 4)].filter(Boolean).join(' — ')
-                    return <g key={person.id} transform={`translate(${point.x - 80} ${point.y - 52})`} role="button" tabIndex={0}
-                      aria-label={`${person.firstName} ${person.lastName}${years ? `, ${years}` : ''}`} aria-pressed={active}
-                      className={`person-node ${active ? 'selected' : ''} ${selectedId && !active && !connected ? 'dimmed' : ''}`}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        if (suppressClick.current) { suppressClick.current = false; return }
-                        selectPerson(person.id)
-                      }}
-                      onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectPerson(person.id) } }}>
-                      <rect width="160" height="104" rx="18" />
-                      {person.photo ? <TreePhoto key={`${person.id}:${person.photo}`} personId={person.id} source={person.photo} passphrase={passphrase}
-                        onError={(message) => setNotice(`${t('photoVariantFailure')} ${message}`)} />
-                        : <g><circle cx="34" cy="34" r="22" className="node-avatar" /><text x="34" y="39" textAnchor="middle" className="avatar-initial">{person.firstName.slice(0, 1)}{person.lastName.slice(0, 1)}</text></g>}
-                      <text x="66" y="30" className="node-name">{person.firstName.slice(0, 13)}</text>
-                      <text x="66" y="49" className="node-lastname">{person.lastName.slice(0, 13)}</text>
-                      <text x="14" y="82" className="node-years">{years || '· · ·'}</text>
+                    return <g key={person.id} transform={`translate(${point.x - 80} ${point.y - 52})`}>
+                      <g role="button" tabIndex={0}
+                        aria-label={`${person.firstName} ${person.lastName}${years ? `, ${years}` : ''}`} aria-pressed={active}
+                        className={`person-node ${active ? 'selected' : ''} ${selectedId && !active && !connected ? 'dimmed' : ''}`}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          if (suppressClick.current) { suppressClick.current = false; return }
+                          selectPerson(person.id)
+                        }}
+                        onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectPerson(person.id) } }}>
+                        <rect width="160" height="104" rx="18" />
+                        {person.photo ? <TreePhoto key={`${person.id}:${person.photo}`} personId={person.id} source={person.photo} passphrase={passphrase}
+                          onError={(message) => setNotice(`${t('photoVariantFailure')} ${message}`)} />
+                          : <g><circle cx="34" cy="34" r="22" className="node-avatar" /><text x="34" y="39" textAnchor="middle" className="avatar-initial">{person.firstName.slice(0, 1)}{person.lastName.slice(0, 1)}</text></g>}
+                        <text x="66" y="30" className="node-name">{person.firstName.slice(0, 13)}</text>
+                        <text x="66" y="49" className="node-lastname">{person.lastName.slice(0, 13)}</text>
+                        <text x="14" y="82" className="node-years">{years || '· · ·'}</text>
+                      </g>
+                      {admin && <g transform="translate(146 14)" role="button" tabIndex={0}
+                        aria-label={`${t('editPerson')}: ${person.firstName} ${person.lastName}`}
+                        className="node-edit-button"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => { event.stopPropagation(); editPerson(person) }}
+                        onKeyDown={(event) => {
+                          event.stopPropagation()
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            editPerson(person)
+                          }
+                        }}>
+                        <circle r="12" />
+                        <Pencil x={-6} y={-6} size={12} />
+                      </g>}
                     </g>
                   })}
                 </g>
@@ -630,9 +675,22 @@ function App() {
               <div className="profile-avatar">{selected.photo ? <ProfilePhoto key={`${selected.id}:${selected.photo}`} personId={selected.id}
                 source={selected.photo} passphrase={passphrase} onError={(message) => setNotice(`${t('photoVariantFailure')} ${message}`)} />
                 : <span>{selected.firstName.slice(0, 1)}{selected.lastName.slice(0, 1)}</span>}</div>
-              <div><span className="profile-label">{t('profileStory')}</span><h2>{selected.firstName} {selected.lastName}</h2>
+              <div className="profile-identity"><span className="profile-label">{t('profileStory')}</span><h2>{selected.firstName} {selected.lastName}</h2>
                 {selected.birthDate && <p>{selected.birthDate.slice(0, 4)}{selected.deathDate ? ` — ${selected.deathDate.slice(0, 4)}` : ` — ${t('aliveToday')}`}</p>}</div>
+              {admin && <button className="button button-light profile-edit" aria-label={`${t('editPerson')}: ${selected.firstName} ${selected.lastName}`}
+                title={t('editPerson')} onClick={editSelected}>
+                <BookOpen size={15} /><span>{t('editPerson')}</span>
+              </button>}
             </div>
+            <section className="family-block"><h3><Users size={15} />{t('family')}</h3>
+              {familyList(t('parents'), relationships(selected.id, 'parent-child', 'in'))}
+              {familyList(t('children'), relationships(selected.id, 'parent-child', 'out'))}
+              {familyList(t('partners'), relationships(selected.id, 'partner'))}
+              {familyList(t('siblings'), relationships(selected.id, 'parent-child', 'in').flatMap((parent) =>
+                relationships(parent.id, 'parent-child', 'out').filter((child) => child.id !== selected.id)))}
+              {relationships(selected.id, 'parent-child').length === 0 && relationships(selected.id, 'partner').length === 0 &&
+                <p className="muted-copy">{t('noFamilyConnections')}</p>}
+            </section>
             {selected.birthDate && !selected.deathDate && birthdayInfo(selected.birthDate) && <div className="birthday-card"><span className="birthday-icon">🎂</span>
               <div><strong>{t('birthdayIn', { days: birthdayInfo(selected.birthDate)!.days })}</strong><small>{birthdayInfo(selected.birthDate)!.date.toLocaleDateString(language)}</small></div></div>}
             <div className="detail-body">
@@ -642,21 +700,12 @@ function App() {
                 {selected.birthPlace && <div><span>{t('birthPlace')}</span><strong>{selected.birthPlace}</strong></div>}
               </div>
               {selected.biography && <section className="bio-block"><h3>{t('biography')}</h3><p>{selected.biography}</p></section>}
-              <section className="family-block"><h3><Users size={15} />{t('family')}</h3>
-                {familyList(t('parents'), relationships(selected.id, 'parent-child', 'in'))}
-                {familyList(t('children'), relationships(selected.id, 'parent-child', 'out'))}
-                {familyList(t('partners'), relationships(selected.id, 'partner'))}
-                {familyList(t('siblings'), relationships(selected.id, 'parent-child', 'in').flatMap((parent) =>
-                  relationships(parent.id, 'parent-child', 'out').filter((child) => child.id !== selected.id)))}
-                {relationships(selected.id, 'parent-child').length === 0 && relationships(selected.id, 'partner').length === 0 && <p className="muted-copy">{t('selectPerson')}</p>}
-              </section>
               {selected.notes && <section className="bio-block"><h3>{t('notes')}</h3><p>{selected.notes}</p></section>}
               <div className="contact-actions">
                 {selected.email && <a className="contact-button" href={`mailto:${encodeURIComponent(selected.email)}?subject=${encodeURIComponent(t('greetingSubject', { name: selected.firstName }))}&body=${encodeURIComponent(t('greetingEmail', { name: selected.firstName }))}`}><Mail size={16} />{t('email')}</a>}
                 {selected.whatsapp && /^\+?[0-9\s().-]{7,20}$/.test(selected.whatsapp) && <a className="contact-button" target="_blank" rel="noreferrer" href={`https://wa.me/${selected.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(t('greetingWhatsApp', { name: selected.firstName }))}`}><Heart size={16} />{t('whatsapp')}</a>}
               </div>
-              {admin && <div className="admin-tools"><button className="button button-light" onClick={() => { setEditing(selected); setCroppedPhoto(null); setModal('person') }}><BookOpen size={15} />{t('editPerson')}</button>
-                <button className="button button-danger" onClick={removeSelected}>{t('remove')}</button>
+              {admin && <div className="admin-tools"><button className="button button-danger" onClick={removeSelected}>{t('remove')}</button>
                 {archive.people.length > 1 && <button className="button button-light" onClick={() => setModal('relationship')}><Users size={15} />{t('relationship')}</button>}
               </div>}
             </div>
