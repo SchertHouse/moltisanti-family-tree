@@ -1,8 +1,9 @@
 import 'fake-indexeddb/auto'
-import { act, cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import * as cryptoModule from './crypto'
+import * as githubModule from './github'
 import type { FamilyArchive } from './model'
 import { clearRememberedPassphrase, getRememberedPassphrase, saveRememberedPassphrase } from './rememberedKey'
 
@@ -11,6 +12,9 @@ describe('family tree interface', () => {
     cleanup()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+    Reflect.deleteProperty(document, 'fullscreenElement')
+    Reflect.deleteProperty(document, 'exitFullscreen')
+    Reflect.deleteProperty(HTMLElement.prototype, 'requestFullscreen')
     await clearRememberedPassphrase()
   })
 
@@ -24,6 +28,28 @@ describe('family tree interface', () => {
     const [url, options] = fetchMock.mock.calls[0]!
     expect(url).toMatch(/family-archive\.enc\.json\?v=\d+$/)
     expect(options).toMatchObject({ cache: 'no-store' })
+  })
+
+  it('fades a notification after ten seconds and then removes it', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 404 })))
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<App />)
+    await screen.findByRole('button', { name: 'Admin' })
+    vi.useFakeTimers()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Admin' }))
+    fireEvent.change(screen.getByLabelText('Local Admin password'), { target: { value: 'incorrect' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+    const notice = screen.getByRole('status')
+    expect(notice).toHaveTextContent('Incorrect password.')
+
+    await act(async () => vi.advanceTimersByTimeAsync(9_999))
+    expect(notice).not.toHaveClass('is-fading')
+    await act(async () => vi.advanceTimersByTimeAsync(1))
+    expect(notice).toHaveClass('is-fading')
+    await act(async () => vi.advanceTimersByTimeAsync(500))
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    vi.useRealTimers()
   })
 
   it('opens the published archive automatically with a remembered passphrase', async () => {
@@ -74,6 +100,59 @@ describe('family tree interface', () => {
     expect(await getRememberedPassphrase()).toBe('entered by user')
   })
 
+  it('lets an admin publish using a new key and then reuse that active key', async () => {
+    const archive: FamilyArchive = {
+      schemaVersion: 1,
+      people: [{ id: 'publish-person', firstName: 'Ada', lastName: 'Lovelace' }],
+      relationships: [],
+    }
+    const encrypted = {
+      format: 'moltisanti-encrypted' as const,
+      formatVersion: 1 as const,
+      algorithm: 'AES-256-GCM' as const,
+      kdf: 'PBKDF2-SHA-256' as const,
+      iterations: 310_000,
+      salt: 'salt',
+      iv: 'iv',
+      ciphertext: 'ciphertext',
+    }
+    vi.spyOn(cryptoModule, 'decryptArchive').mockResolvedValue(archive)
+    vi.spyOn(cryptoModule, 'prepareArchivePhotos').mockResolvedValue(archive)
+    const encryptSpy = vi.spyOn(cryptoModule, 'encryptPreparedArchive').mockResolvedValue(encrypted)
+    const publishSpy = vi.spyOn(githubModule, 'publishEncryptedArchive').mockResolvedValue(undefined)
+    await saveRememberedPassphrase('current family passphrase')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(encrypted))))
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<App />)
+
+    await screen.findByRole('button', { name: 'Ada Lovelace' })
+    fireEvent.click(screen.getByRole('button', { name: 'Admin' }))
+    fireEvent.change(screen.getByLabelText('Local Admin password'), { target: { value: 'moltisantitree' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Publish to GitHub' }))
+    const publishDialog = screen.getByRole('dialog', { name: 'Publish to GitHub' })
+    fireEvent.click(screen.getByRole('button', { name: 'Set a new key' }))
+    fireEvent.change(screen.getByLabelText('Encryption passphrase'), { target: { value: 'new secure family passphrase' } })
+    fireEvent.change(screen.getByLabelText('Confirm passphrase'), { target: { value: 'new secure family passphrase' } })
+    fireEvent.change(screen.getByLabelText('GitHub owner'), { target: { value: 'family' } })
+    fireEvent.change(screen.getByLabelText('Fine-grained token (memory only)'), { target: { value: 'token' } })
+    fireEvent.click(within(publishDialog).getByRole('button', { name: 'Publish to GitHub' }))
+
+    await waitFor(() => expect(publishSpy).toHaveBeenCalledTimes(1))
+    expect(encryptSpy).toHaveBeenLastCalledWith(archive, 'new secure family passphrase')
+    expect(screen.getByRole('status')).toHaveTextContent('Share the new passphrase')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Publish to GitHub' }))
+    const reuseDialog = screen.getByRole('dialog', { name: 'Publish to GitHub' })
+    expect(within(reuseDialog).getByRole('button', { name: 'Reuse key' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.change(screen.getByLabelText('GitHub owner'), { target: { value: 'family' } })
+    fireEvent.change(screen.getByLabelText('Fine-grained token (memory only)'), { target: { value: 'token' } })
+    fireEvent.click(within(reuseDialog).getByRole('button', { name: 'Publish to GitHub' }))
+
+    await waitFor(() => expect(publishSpy).toHaveBeenCalledTimes(2))
+    expect(encryptSpy).toHaveBeenLastCalledWith(archive, 'new secure family passphrase')
+  })
+
   it('accepts Italian DD-MM-YYYY dates and displays them in the same format', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 404 })))
     vi.spyOn(window, 'confirm').mockReturnValue(true)
@@ -90,6 +169,48 @@ describe('family tree interface', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Aggiungi' }))
 
     expect(await screen.findByText('29-02-2000')).toBeInTheDocument()
+  })
+
+  it('enters and exits full screen for the genealogy tree', async () => {
+    const archive: FamilyArchive = {
+      schemaVersion: 1,
+      people: [{ id: 'fullscreen-person', firstName: 'Ada', lastName: 'Lovelace' }],
+      relationships: [],
+    }
+    let fullscreenElement: Element | null = null
+    Object.defineProperty(document, 'fullscreenElement', {
+      configurable: true,
+      get: () => fullscreenElement,
+    })
+    const requestFullscreen = vi.fn(async () => {
+      fullscreenElement = document.querySelector('.tree-area')
+      document.dispatchEvent(new Event('fullscreenchange'))
+    })
+    const exitFullscreen = vi.fn(async () => {
+      fullscreenElement = null
+      document.dispatchEvent(new Event('fullscreenchange'))
+    })
+    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', {
+      configurable: true,
+      value: requestFullscreen,
+    })
+    Object.defineProperty(document, 'exitFullscreen', {
+      configurable: true,
+      value: exitFullscreen,
+    })
+    vi.spyOn(cryptoModule, 'decryptArchive').mockResolvedValue(archive)
+    await saveRememberedPassphrase('fullscreen test key')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}')))
+    render(<App />)
+
+    await screen.findByRole('button', { name: 'Ada Lovelace' })
+    fireEvent.click(screen.getByRole('button', { name: 'Full screen' }))
+    expect(requestFullscreen).toHaveBeenCalledTimes(1)
+    expect(await screen.findByRole('button', { name: 'Exit full screen' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Exit full screen' }))
+    expect(exitFullscreen).toHaveBeenCalledTimes(1)
+    expect(await screen.findByRole('button', { name: 'Full screen' })).toBeInTheDocument()
   })
 
   it('lets an admin create and inspect a person without persisting the archive', async () => {
@@ -140,6 +261,9 @@ describe('family tree interface', () => {
     fireEvent.click(childNode)
     expect(screen.getByRole('heading', { name: 'Bea Lovelace' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Parents' })).toBeInTheDocument()
+    const profileEditButton = screen.getAllByRole('button', { name: 'Edit person: Bea Lovelace' })
+      .find((button) => button.classList.contains('profile-edit'))
+    expect(profileEditButton?.parentElement).toHaveClass('profile-identity')
     expect(screen.getAllByRole('button', { name: /Ada Lovelace/ })
       .some((button) => button.classList.contains('relative-person'))).toBe(true)
 

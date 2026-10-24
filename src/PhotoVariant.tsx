@@ -91,7 +91,8 @@ export function TreePhoto({ personId, source, passphrase, onError }: PhotoProps)
   return <g>
     <image ref={elementRef} href={url ?? undefined} x="12" y="12" width="44" height="44"
       preserveAspectRatio="xMidYMid slice" clipPath="inset(0 round 22px)" />
-    {loading && <LoaderCircle className="tree-photo-spinner" x="26" y="26" size={16} aria-hidden="true" />}
+    {loading && <circle className="tree-photo-spinner" cx="34" cy="34" r="7" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeDasharray="30 14" strokeLinecap="round" aria-hidden="true" />}
   </g>
 }
 

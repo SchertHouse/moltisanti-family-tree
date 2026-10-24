@@ -188,9 +188,11 @@ export function treePositions(archive: FamilyArchive): Map<string, { x: number; 
       a.firstName.localeCompare(b.firstName) || a.lastName.localeCompare(b.lastName) || a.id.localeCompare(b.id)),
     level: generations.get(people[0]!.id) ?? 0,
   }))
+  const layoutGroupById = new Map(groups.map((group) => [group.id, group]))
   const groupByPerson = new Map(groups.flatMap((group) => group.people.map((person) => [person.id, group.id] as const)))
   const parents = new Map(groups.map((group) => [group.id, new Set<string>()]))
   const children = new Map(groups.map((group) => [group.id, new Set<string>()]))
+  const anchors = new Map(groups.map((group) => [group.id, [] as LayoutAnchor[]]))
   for (const relationship of archive.relationships) {
     if (relationship.type !== 'parent-child') continue
     const parent = groupByPerson.get(relationship.from)!
@@ -198,6 +200,27 @@ export function treePositions(archive: FamilyArchive): Map<string, { x: number; 
     if (parent === child) continue
     parents.get(child)!.add(parent)
     children.get(parent)!.add(child)
+    const parentGroup = layoutGroupById.get(parent)!
+    const childGroup = layoutGroupById.get(child)!
+    const parentOffset = personOffset(parentGroup, relationship.from)
+    const childOffset = personOffset(childGroup, relationship.to)
+    anchors.get(child)!.push({ neighborId: parent, ownOffset: childOffset, neighborOffset: parentOffset })
+    anchors.get(parent)!.push({ neighborId: child, ownOffset: parentOffset, neighborOffset: childOffset })
+  }
+
+  const parentsByPerson = new Map<string, Set<string>>()
+  for (const relationship of archive.relationships) {
+    if (relationship.type !== 'parent-child') continue
+    const personParents = parentsByPerson.get(relationship.to) ?? new Set<string>()
+    personParents.add(relationship.from)
+    parentsByPerson.set(relationship.to, personParents)
+  }
+  const siblingFamilies = new Map<string, Set<string>>()
+  for (const [personId, parentIds] of parentsByPerson) {
+    const familyKey = JSON.stringify([...parentIds].sort())
+    const familyGroups = siblingFamilies.get(familyKey) ?? new Set<string>()
+    familyGroups.add(groupByPerson.get(personId)!)
+    siblingFamilies.set(familyKey, familyGroups)
   }
 
   const maxLevel = Math.max(0, ...groups.map((group) => group.level))
@@ -205,23 +228,45 @@ export function treePositions(archive: FamilyArchive): Map<string, { x: number; 
     groups.filter((group) => group.level === level).sort((a, b) => a.id.localeCompare(b.id)))
   for (let pass = 0; pass < 4; pass += 1) {
     for (let level = 1; level <= maxLevel; level += 1) {
-      reorderLayer(layers[level]!, layers[level - 1]!, parents)
+      reorderLayer(layers[level]!, layers[level - 1]!, parents, siblingFamilies)
     }
     for (let level = maxLevel - 1; level >= 0; level -= 1) {
-      reorderLayer(layers[level]!, layers[level + 1]!, children)
+      reorderLayer(layers[level]!, layers[level + 1]!, children, siblingFamilies)
     }
   }
 
-  const positions = new Map<string, { x: number; y: number }>()
-  for (const [level, layer] of layers.entries()) {
+  const groupCenters = new Map<string, number>()
+  for (const layer of layers) {
     const width = layer.reduce((total, group) => total + groupWidth(group.people.length), 0) +
       Math.max(0, layer.length - 1) * 80
     let left = 500 - width / 2
     for (const group of layer) {
+      const width = groupWidth(group.people.length)
+      groupCenters.set(group.id, left + width / 2)
+      left += width + 80
+    }
+  }
+  for (let pass = 0; pass < 12; pass += 1) {
+    for (let level = 1; level <= maxLevel; level += 1) {
+      positionLayer(layers[level]!, anchors, groupCenters)
+    }
+    for (let level = maxLevel - 1; level >= 0; level -= 1) {
+      positionLayer(layers[level]!, anchors, groupCenters)
+    }
+  }
+
+  const minimumX = Math.min(...groups.map((group) =>
+    groupCenters.get(group.id)! - groupWidth(group.people.length) / 2))
+  const maximumX = Math.max(...groups.map((group) =>
+    groupCenters.get(group.id)! + groupWidth(group.people.length) / 2))
+  const translateX = 500 - (minimumX + maximumX) / 2
+  const positions = new Map<string, { x: number; y: number }>()
+  for (const [level, layer] of layers.entries()) {
+    for (const group of layer) {
+      const left = groupCenters.get(group.id)! - groupWidth(group.people.length) / 2
       group.people.forEach((person, index) => {
-        positions.set(person.id, { x: left + 80 + index * 190, y: 100 + level * 190 })
+        positions.set(person.id, { x: left + 80 + index * 190 + translateX, y: 100 + level * 190 })
       })
-      left += groupWidth(group.people.length) + 80
     }
   }
   return positions
@@ -299,25 +344,131 @@ function groupWidth(peopleCount: number): number {
   return 160 + Math.max(0, peopleCount - 1) * 190
 }
 
+interface LayoutAnchor {
+  neighborId: string
+  ownOffset: number
+  neighborOffset: number
+}
+
+function personOffset(group: LayoutGroup, personId: string): number {
+  const index = group.people.findIndex((person) => person.id === personId)
+  return (index - (group.people.length - 1) / 2) * 190
+}
+
+function positionLayer(
+  layer: LayoutGroup[],
+  anchors: Map<string, LayoutAnchor[]>,
+  centers: Map<string, number>,
+): void {
+  const offsets = [0]
+  for (let index = 1; index < layer.length; index += 1) {
+    offsets.push(offsets[index - 1]! +
+      groupWidth(layer[index - 1]!.people.length) / 2 +
+      groupWidth(layer[index]!.people.length) / 2 + 80)
+  }
+  const targets = layer.map((group) => {
+    const neighborCenters = (anchors.get(group.id) ?? [])
+      .map((anchor) => {
+        const neighborCenter = centers.get(anchor.neighborId)
+        return neighborCenter === undefined
+          ? undefined
+          : neighborCenter + anchor.neighborOffset - anchor.ownOffset
+      })
+      .filter((center): center is number => center !== undefined)
+    return neighborCenters.length
+      ? neighborCenters.reduce((total, center) => total + center, 0) / neighborCenters.length
+      : centers.get(group.id)!
+  })
+  const blocks: { start: number; end: number; total: number; count: number }[] = []
+  for (let index = 0; index < targets.length; index += 1) {
+    const adjusted = targets[index]! - offsets[index]!
+    blocks.push({ start: index, end: index, total: adjusted, count: 1 })
+    while (blocks.length > 1) {
+      const current = blocks[blocks.length - 1]!
+      const previous = blocks[blocks.length - 2]!
+      if (previous.total / previous.count <= current.total / current.count) break
+      blocks.splice(-2, 2, {
+        start: previous.start,
+        end: current.end,
+        total: previous.total + current.total,
+        count: previous.count + current.count,
+      })
+    }
+  }
+  for (const block of blocks) {
+    const adjustedCenter = block.total / block.count
+    for (let index = block.start; index <= block.end; index += 1) {
+      centers.set(layer[index]!.id, adjustedCenter + offsets[index]!)
+    }
+  }
+}
+
 function reorderLayer(
   layer: LayoutGroup[],
   neighbors: LayoutGroup[],
   links: Map<string, Set<string>>,
+  siblingFamilies: Map<string, Set<string>>,
 ): void {
-  const neighborIndex = new Map(neighbors.map((group, index) => [group.id, index]))
+  const neighborCenter = new Map<string, number>()
+  let neighborLeft = 0
+  for (const group of neighbors) {
+    neighborCenter.set(group.id, neighborLeft + groupWidth(group.people.length) / 2)
+    neighborLeft += groupWidth(group.people.length) + 80
+  }
   const originalOrder = new Map(layer.map((group, index) => [group.id, index]))
+  const familyParents = new Map(layer.map((group) => [group.id, group.id]))
+  const findFamily = (groupId: string): string => {
+    const root = familyParents.get(groupId)!
+    if (root !== groupId) familyParents.set(groupId, findFamily(root))
+    return familyParents.get(groupId)!
+  }
+  const joinFamily = (firstId: string, secondId: string) => {
+    const firstRoot = findFamily(firstId)
+    const secondRoot = findFamily(secondId)
+    if (firstRoot !== secondRoot) familyParents.set(secondRoot, firstRoot)
+  }
+  const linkedGroups = new Map<string, string[]>()
+  for (const group of layer) {
+    const linked = [...(links.get(group.id) ?? [])].sort()
+    if (!linked.length) continue
+    const signature = JSON.stringify(linked)
+    linkedGroups.set(signature, [...(linkedGroups.get(signature) ?? []), group.id])
+  }
+  for (const groupIds of linkedGroups.values()) {
+    for (let index = 1; index < groupIds.length; index += 1) joinFamily(groupIds[0]!, groupIds[index]!)
+  }
+  for (const family of siblingFamilies.values()) {
+    const groupIds = [...family].filter((groupId) => familyParents.has(groupId))
+    for (let index = 1; index < groupIds.length; index += 1) joinFamily(groupIds[0]!, groupIds[index]!)
+  }
+  const blocksByRoot = new Map<string, LayoutGroup[]>()
+  for (const group of layer) {
+    const root = findFamily(group.id)
+    blocksByRoot.set(root, [...(blocksByRoot.get(root) ?? []), group])
+  }
   const barycenter = (groupId: string): number | null => {
     const indexes = [...(links.get(groupId) ?? [])]
-      .map((neighborId) => neighborIndex.get(neighborId))
-      .filter((index): index is number => index !== undefined)
-    return indexes.length ? indexes.reduce((total, index) => total + index, 0) / indexes.length : null
+      .map((neighborId) => neighborCenter.get(neighborId))
+      .filter((center): center is number => center !== undefined)
+    return indexes.length ? indexes.reduce((total, center) => total + center, 0) / indexes.length : null
   }
-  layer.sort((a, b) => {
-    const aCenter = barycenter(a.id)
-    const bCenter = barycenter(b.id)
-    if (aCenter === null && bCenter !== null) return (originalOrder.get(a.id) ?? 0) - (originalOrder.get(b.id) ?? 0)
-    if (aCenter !== null && bCenter === null) return (originalOrder.get(a.id) ?? 0) - (originalOrder.get(b.id) ?? 0)
-    return (aCenter ?? 0) - (bCenter ?? 0) ||
-      (originalOrder.get(a.id) ?? 0) - (originalOrder.get(b.id) ?? 0)
+  const blocks = [...blocksByRoot.values()].map((family) => {
+    const familyGroupsInOrder = family.sort((a, b) =>
+      (originalOrder.get(a.id) ?? 0) - (originalOrder.get(b.id) ?? 0))
+    const centers = familyGroupsInOrder.map((group) => barycenter(group.id))
+      .filter((value): value is number => value !== null)
+    return {
+      groups: familyGroupsInOrder,
+      center: centers.length ? centers.reduce((total, value) => total + value, 0) / centers.length : null,
+      originalIndex: Math.min(...familyGroupsInOrder.map((group) => originalOrder.get(group.id) ?? 0)),
+    }
   })
+  blocks.sort((a, b) => {
+    const aCenter = a.center
+    const bCenter = b.center
+    if (aCenter === null && bCenter !== null) return a.originalIndex - b.originalIndex
+    if (aCenter !== null && bCenter === null) return a.originalIndex - b.originalIndex
+    return (aCenter ?? 0) - (bCenter ?? 0) || a.originalIndex - b.originalIndex
+  })
+  layer.splice(0, layer.length, ...blocks.flatMap((block) => block.groups))
 }

@@ -109,4 +109,72 @@ describe('family tree layout', () => {
     expect(positions.get('parent-a')!.x).toBeLessThan(positions.get('parent-b')!.x)
     expect(positions.get('child-b')!.x).toBeLessThan(positions.get('child-a')!.x)
   })
+
+  it('keeps children of the same parents together in their generation', () => {
+    const archive = emptyArchive()
+    archive.people = [
+      { id: 'parent-a', firstName: 'Ada', lastName: 'Family' },
+      { id: 'parent-b', firstName: 'Bea', lastName: 'Family' },
+      { id: 'other-parent-a', firstName: 'Cora', lastName: 'Family' },
+      { id: 'other-parent-b', firstName: 'Dina', lastName: 'Family' },
+      { id: 'sibling-a', firstName: 'Elena', lastName: 'Family' },
+      { id: 'unrelated-child', firstName: 'Frida', lastName: 'Family' },
+      { id: 'sibling-z', firstName: 'Greta', lastName: 'Family' },
+      { id: 'sibling-a-partner', firstName: 'Hana', lastName: 'Family' },
+      { id: 'sibling-z-partner', firstName: 'Iris', lastName: 'Family' },
+    ]
+    archive.relationships = [
+      { id: 'partner-a', type: 'partner', from: 'parent-a', to: 'parent-b' },
+      { id: 'partner-b', type: 'partner', from: 'other-parent-a', to: 'other-parent-b' },
+      { id: 'sibling-a-partner', type: 'partner', from: 'sibling-a', to: 'sibling-a-partner' },
+      { id: 'sibling-z-partner', type: 'partner', from: 'sibling-z', to: 'sibling-z-partner' },
+      { id: 'parent-a-sibling-a', type: 'parent-child', from: 'parent-a', to: 'sibling-a' },
+      { id: 'parent-b-sibling-a', type: 'parent-child', from: 'parent-b', to: 'sibling-a' },
+      { id: 'parent-a-sibling-z', type: 'parent-child', from: 'parent-a', to: 'sibling-z' },
+      { id: 'parent-b-sibling-z', type: 'parent-child', from: 'parent-b', to: 'sibling-z' },
+      { id: 'other-parent-a-child', type: 'parent-child', from: 'other-parent-a', to: 'unrelated-child' },
+      { id: 'other-parent-b-child', type: 'parent-child', from: 'other-parent-b', to: 'unrelated-child' },
+    ]
+
+    const positions = treePositions(archive)
+    const siblingXs = ['sibling-a', 'sibling-a-partner', 'sibling-z', 'sibling-z-partner']
+      .map((personId) => positions.get(personId)!.x)
+    const unrelatedX = positions.get('unrelated-child')!.x
+
+    expect(positions.get('sibling-a')!.y).toBe(positions.get('sibling-z')!.y)
+    expect(unrelatedX < Math.min(...siblingXs) || unrelatedX > Math.max(...siblingXs)).toBe(true)
+  })
+
+  it('centers parent groups over their children using each group’s actual width', () => {
+    const archive = emptyArchive()
+    archive.people = [
+      { id: 'parent-a', firstName: 'Ada', lastName: 'Family' },
+      { id: 'parent-b', firstName: 'Bea', lastName: 'Family' },
+      { id: 'other-parent-a', firstName: 'Cora', lastName: 'Family' },
+      { id: 'other-parent-b', firstName: 'Dina', lastName: 'Family' },
+      { id: 'child-a', firstName: 'Elena', lastName: 'Family' },
+      { id: 'child-a-partner', firstName: 'Frida', lastName: 'Family' },
+      { id: 'child-b', firstName: 'Greta', lastName: 'Family' },
+      { id: 'child-b-partner', firstName: 'Hana', lastName: 'Family' },
+      { id: 'other-child', firstName: 'Iris', lastName: 'Family' },
+    ]
+    archive.relationships = [
+      { id: 'partner-a', type: 'partner', from: 'parent-a', to: 'parent-b' },
+      { id: 'partner-b', type: 'partner', from: 'other-parent-a', to: 'other-parent-b' },
+      { id: 'child-a-partner', type: 'partner', from: 'child-a', to: 'child-a-partner' },
+      { id: 'child-b-partner', type: 'partner', from: 'child-b', to: 'child-b-partner' },
+      { id: 'parent-a-child-a', type: 'parent-child', from: 'parent-a', to: 'child-a' },
+      { id: 'parent-b-child-a', type: 'parent-child', from: 'parent-b', to: 'child-a' },
+      { id: 'parent-a-child-b', type: 'parent-child', from: 'parent-a', to: 'child-b' },
+      { id: 'parent-b-child-b', type: 'parent-child', from: 'parent-b', to: 'child-b' },
+      { id: 'other-parent-a-child', type: 'parent-child', from: 'other-parent-a', to: 'other-child' },
+      { id: 'other-parent-b-child', type: 'parent-child', from: 'other-parent-b', to: 'other-child' },
+    ]
+
+    const positions = treePositions(archive)
+    const parentCenter = (positions.get('parent-a')!.x + positions.get('parent-b')!.x) / 2
+    const childrenCenter = (positions.get('child-a')!.x + positions.get('child-b')!.x) / 2
+
+    expect(parentCenter).toBe(childrenCenter)
+  })
 })

@@ -8,11 +8,13 @@ Stato verificato per l'implementazione corrente; non sostituisce l'esecuzione de
 - [x] Modello versione 1, validazione, archivio AES-256-GCM/PBKDF2, import con riepilogo e export JSON cifrato/in chiaro con conferma.
 - [x] Caricamento automatico dell'archivio cifrato pubblicato nel percorso previsto e controllo degli asset in build.
 - [x] Ricordo facoltativo della passphrase cifrata in IndexedDB con chiave non esportabile, apertura automatica, fallback manuale e rimozione.
-- [x] Pubblicazione GitHub Contents dell'archivio cifrato singolo con SHA per aggiornamento e segnalazione conflitti.
+- [x] Pubblicazione GitHub Contents dell'archivio cifrato singolo con SHA per aggiornamento e segnalazione conflitti; riuso della chiave attiva o cifratura con nuova passphrase.
 - [x] Ritaglio quadrato delle fotografie prima di associarle a un profilo.
 - [x] Normalizzazione immagini configurabile (massimo iniziale 1200 × 1200), cifratura individuale, varianti generate on demand, concorrenza limitata e cache IndexedDB cifrata con fallback volatile e controllo UI.
-- [x] Layout genealogico raggruppato: partner compatibili allineati, figli organizzati per insieme di genitori, livelli ordinati per ridurre gli incroci e archi familiari ortogonali condivisi.
+- [x] Layout genealogico raggruppato: partner compatibili allineati, figli organizzati per insieme di genitori, coordinate basate sulle larghezze reali e sugli endpoint effettivi delle relazioni, livelli ordinati per ridurre gli incroci e archi familiari ortogonali condivisi.
+- [x] Mantenere contigui nel layout i fratelli con lo stesso insieme di genitori, evitando connettori che attraversino rami estranei.
 - [x] Prima interfaccia responsive per consultazione, ricerca, gestione locale e relazioni.
+- [x] Visualizzazione fullscreen dell'area dell'albero con uscita tramite pulsante o tasto Escape.
 - [x] Traduzioni `it`, `en`, `eo` e documentazione di architettura e sicurezza.
 - [x] Deduplicazione dell'elenco fratelli/sorelle quando condividono più di un genitore.
 - [x] Ricerca dei fratelli/sorelle deduplicata per ID persona, mantenendo l'ordine di prima apparizione.

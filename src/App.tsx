@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent } from 'react'
 import {
   BookOpen, Check, ChevronDown, CircleHelp, Download, FileLock2, Heart, LoaderCircle,
-  Languages, LockKeyhole, Mail, Maximize2, Minus, MousePointer2, Pencil, Plus, Search, ShieldCheck,
-  Sparkles, Trash2, Upload, UserRoundPlus, Users, X,
+  Languages, LockKeyhole, Mail, Maximize, Maximize2, Minimize, Minus, MousePointer2, Pencil, Plus,
+  Search, ShieldCheck, Sparkles, Trash2, Upload, UserRoundPlus, Users, X,
 } from 'lucide-react'
 import {
   decryptArchive, decryptArchivePhotos, encryptPreparedArchive, isEncryptedImage,
@@ -42,6 +42,7 @@ function App() {
   const [modal, setModal] = useState<Modal>(null)
   const [keyPurpose, setKeyPurpose] = useState<'open' | 'save'>('save')
   const [replaceKey, setReplaceKey] = useState(false)
+  const [publishNewKey, setPublishNewKey] = useState(false)
   const [pendingEnvelope, setPendingEnvelope] = useState<unknown>(null)
   const [pendingArchive, setPendingArchive] = useState<FamilyArchive | null>(null)
   const [pendingPassphrase, setPendingPassphrase] = useState('')
@@ -50,7 +51,14 @@ function App() {
   const [croppedPhoto, setCroppedPhoto] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [generation, setGeneration] = useState('all')
-  const [notice, setNotice] = useState('')
+  const [notice, setNoticeText] = useState('')
+  const [noticeVersion, setNoticeVersion] = useState(0)
+  const [noticeFading, setNoticeFading] = useState(false)
+  const setNotice = (message: string) => {
+    setNoticeText(message)
+    setNoticeVersion((version) => version + 1)
+    setNoticeFading(false)
+  }
   const [clearingImageCache, setClearingImageCache] = useState(false)
   const [busyAction, setBusyAction] = useState<BusyAction>(null)
   const [loadingPublishedArchive, setLoadingPublishedArchive] = useState(true)
@@ -58,6 +66,8 @@ function App() {
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 1 })
   const canvasRef = useRef<SVGSVGElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
+  const treeAreaRef = useRef<HTMLDivElement>(null)
+  const [treeFullscreen, setTreeFullscreen] = useState(false)
   const drag = useRef<{ x: number; y: number; viewX: number; viewY: number } | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   const pinch = useRef<{ distance: number; scale: number; worldX: number; worldY: number } | null>(null)
@@ -72,6 +82,15 @@ function App() {
     window.addEventListener('image-cache-fallback', notifyFallback)
     return () => window.removeEventListener('image-cache-fallback', notifyFallback)
   }, [language])
+  useEffect(() => {
+    if (!notice) return
+    const fadeTimer = window.setTimeout(() => setNoticeFading(true), 10_000)
+    const dismissTimer = window.setTimeout(() => setNoticeText(''), 10_500)
+    return () => {
+      window.clearTimeout(fadeTimer)
+      window.clearTimeout(dismissTimer)
+    }
+  }, [notice, noticeVersion])
   useEffect(() => {
     languageRef.current = language
   }, [language])
@@ -199,10 +218,34 @@ function App() {
         y: box.height / 2 - ((minY + maxY) / 2) * current.scale,
       }))
     }
+    const updateFullscreen = () => {
+      setTreeFullscreen(document.fullscreenElement === treeAreaRef.current)
+      center()
+    }
     center()
     window.addEventListener('resize', center)
-    return () => window.removeEventListener('resize', center)
+    document.addEventListener('fullscreenchange', updateFullscreen)
+    return () => {
+      window.removeEventListener('resize', center)
+      document.removeEventListener('fullscreenchange', updateFullscreen)
+    }
   }, [positions, selectedId])
+
+  const toggleTreeFullscreen = async () => {
+    const treeArea = treeAreaRef.current
+    if (!treeArea) return
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen()
+      } else if (typeof treeArea.requestFullscreen === 'function') {
+        await treeArea.requestFullscreen()
+      } else {
+        setNotice(t('fullscreenUnavailable'))
+      }
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : t('fullscreenFailure'))
+    }
+  }
 
   const selectPerson = (id: string) => {
     setSelectedId(id)
@@ -611,16 +654,24 @@ function App() {
     const form = event.currentTarget
     const data = new FormData(form)
     const githubToken = String(data.get('token') || '')
-    form.reset()
-    if (!passphrase) {
+    const key = publishNewKey ? String(data.get('publishPassphrase') || '') : passphrase
+    if (!key) {
       setNotice(t('passphraseRequired'))
+      return
+    }
+    if (publishNewKey && key.length < 12) {
+      setNotice(t('passphraseGuidance'))
+      return
+    }
+    if (publishNewKey && key !== data.get('publishPassphraseConfirmation')) {
+      setNotice(t('passphraseMismatch'))
       return
     }
     setBusyAction('publishing')
     try {
-      const prepared = await prepareArchivePhotos(archive, passphrase, passphrase)
-      const encrypted = await encryptPreparedArchive(prepared, passphrase)
-      await decryptArchive(encrypted, passphrase)
+      const prepared = await prepareArchivePhotos(archive, key, passphrase || key)
+      const encrypted = await encryptPreparedArchive(prepared, key)
+      await decryptArchive(encrypted, key)
       await publishEncryptedArchive({
         owner: String(data.get('owner')),
         repo: String(data.get('repo')),
@@ -628,8 +679,12 @@ function App() {
         path: String(data.get('path')),
         token: githubToken,
       }, JSON.stringify(encrypted))
+      const storageWarning = await persistPassphraseChoice(key, rememberPassphrase)
       setArchive(prepared)
-      setNotice(t('published'))
+      setPassphrase(key)
+      setNotice(storageWarning ?? (key !== passphrase
+        ? `${t('published')} ${t('keyChangedNotice')}`
+        : t('published')))
       setModal(null)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : t('publishFailure'))
@@ -683,7 +738,7 @@ function App() {
       </section>
 
       <section className="workspace">
-        <div className="tree-area">
+        <div className="tree-area" ref={treeAreaRef}>
           <div className="tree-toolbar">
             <div className="search-wrap"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('search')} aria-label={t('search')} />
               {query && <button className="icon-button clear-search" aria-label={t('close')} onClick={() => setQuery('')}><X size={15} /></button>}
@@ -819,6 +874,12 @@ function App() {
                 <button aria-label={t('zoomOut')} title={t('zoomOut')} onClick={() => setView((v) => ({ ...v, scale: Math.max(0.4, v.scale / 1.15) }))}><Minus size={17} /></button>
                 <i />
                 <button aria-label={t('resetView')} title={t('resetView')} onClick={resetView}><Maximize2 size={16} /></button>
+                <i />
+                <button aria-label={treeFullscreen ? t('exitFullscreen') : t('fullScreen')}
+                  title={treeFullscreen ? t('exitFullscreen') : t('fullScreen')}
+                  onClick={() => void toggleTreeFullscreen()}>
+                  {treeFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
+                </button>
               </div>
             </>}
             {archive.people.length > 0 && admin && <button className="floating-add" onClick={() => { setEditing(null); setCroppedPhoto(null); setModal('person') }}><Plus size={18} /><span>{t('addPerson')}</span></button>}
@@ -842,11 +903,12 @@ function App() {
                 source={selected.photo} passphrase={passphrase} onError={(message) => setNotice(`${t('photoVariantFailure')} ${message}`)} />
                 : <span>{selected.firstName.slice(0, 1)}{selected.lastName.slice(0, 1)}</span>}</div>
               <div className="profile-identity"><span className="profile-label">{t('profileStory')}</span><h2>{selected.firstName} {selected.lastName}</h2>
-                {selected.birthDate && <p>{selected.birthDate.slice(0, 4)}{selected.deathDate ? ` — ${selected.deathDate.slice(0, 4)}` : ` — ${t('aliveToday')}`}</p>}</div>
-              {admin && <button className="button button-light profile-edit" aria-label={`${t('editPerson')}: ${selected.firstName} ${selected.lastName}`}
-                title={t('editPerson')} onClick={editSelected}>
-                <BookOpen size={15} /><span>{t('editPerson')}</span>
-              </button>}
+                {selected.birthDate && <p>{selected.birthDate.slice(0, 4)}{selected.deathDate ? ` — ${selected.deathDate.slice(0, 4)}` : ` — ${t('aliveToday')}`}</p>}
+                {admin && <button className="button button-light profile-edit" aria-label={`${t('editPerson')}: ${selected.firstName} ${selected.lastName}`}
+                  title={t('editPerson')} onClick={editSelected}>
+                  <BookOpen size={15} /><span>{t('editPerson')}</span>
+                </button>}
+              </div>
             </div>
             <section className="family-block"><h3><Users size={15} />{t('family')}</h3>
               {familyList(t('parents'), relationships(selected.id, 'parent-child', 'in'))}
@@ -895,10 +957,14 @@ function App() {
               void selectPlainArchive(event.currentTarget.files?.[0], event.currentTarget)
             }} />
           </label>
-          <button className="button button-light" disabled={busyAction !== null} onClick={() => setModal('publish')}><Upload size={16} />{t('publish')}</button></div>
+          <button className="button button-light" disabled={busyAction !== null} onClick={() => {
+            setPublishNewKey(!passphrase)
+            setRememberPassphrase(rememberedKeyAvailable)
+            setModal('publish')
+          }}><Upload size={16} />{t('publish')}</button></div>
       </section>}
 
-      {notice && <div className="notice" role="status"><Check size={17} />{notice}<button onClick={() => setNotice('')} aria-label={t('close')}><X size={16} /></button></div>}
+      {notice && <div className={`notice ${noticeFading ? 'is-fading' : ''}`} role="status"><Check size={17} />{notice}<button onClick={() => setNotice('')} aria-label={t('close')}><X size={16} /></button></div>}
 
       {modal && <div className="modal-backdrop" onMouseDown={(event) => {
         if (event.target === event.currentTarget && busyAction === null) cancelModal()
@@ -1002,6 +1068,29 @@ function App() {
           {modal === 'publish' && <><div className="modal-symbol"><Upload size={23} /></div><h2 id="modal-title">{t('publish')}</h2>
             <p>{t('publishWarning')}</p>
             <form className="form-stack" onSubmit={publishArchive}>
+              {passphrase && <div className="key-choice">
+                <div className="inline-warning"><ShieldCheck size={16} /> {t('activeKeyInfo')}</div>
+                <div className="key-choice-actions">
+                  <button type="button" className={`button ${publishNewKey ? 'button-light' : 'button-primary'}`}
+                    aria-pressed={!publishNewKey} disabled={busyAction !== null}
+                    onClick={() => setPublishNewKey(false)}>{t('reuseKey')}</button>
+                  <button type="button" className={`button ${publishNewKey ? 'button-primary' : 'button-light'}`}
+                    aria-pressed={publishNewKey} disabled={busyAction !== null}
+                    onClick={() => setPublishNewKey(true)}>{t('newKey')}</button>
+                </div>
+              </div>}
+              {publishNewKey && <>
+                <label>{t('passphrase')}<input autoFocus name="publishPassphrase" type="password" minLength={12} required /></label>
+                <label>{t('passphraseConfirmation')}<input name="publishPassphraseConfirmation" type="password" minLength={12} required /></label>
+              </>}
+              <div className="remember-key-option">
+                <span id="publish-remember-key-label">{t('rememberPassphrase')}</span>
+                <button className="remember-key-switch" type="button" role="switch"
+                  aria-checked={rememberPassphrase} aria-labelledby="publish-remember-key-label"
+                  onClick={() => setRememberPassphrase((remember) => !remember)}>
+                  <span className="remember-key-switch-track" aria-hidden="true" />
+                </button>
+              </div>
               <div className="two-fields"><label>{t('githubOwner')}<input name="owner" required /></label><label>{t('githubRepo')}<input name="repo" required defaultValue="moltisanti-family-tree" /></label></div>
               <div className="two-fields"><label>{t('githubBranch')}<input name="branch" required defaultValue="main" /></label><label>{t('githubPath')}<input name="path" required defaultValue={archivePath} readOnly /></label></div>
               <label>{t('githubToken')}<input name="token" type="password" autoComplete="off" required /></label>
