@@ -213,6 +213,39 @@ describe('family tree interface', () => {
     expect(await screen.findByRole('button', { name: 'Full screen' })).toBeInTheDocument()
   })
 
+  it('lets an admin remove a relationship without deleting either person', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 404 })))
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<App />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Admin' }))
+    fireEvent.change(screen.getByLabelText('Local Admin password'), { target: { value: 'moltisantitree' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add person' }))
+    fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Parent' } })
+    fireEvent.change(screen.getByLabelText('Last name'), { target: { value: 'Family' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add person' }))
+    fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Child' } })
+    fireEvent.change(screen.getByLabelText('Last name'), { target: { value: 'Family' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Parent Family' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add a connection' }))
+    fireEvent.change(screen.getByLabelText('Relationship type'), { target: { value: 'parent-child' } })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Person' }), { target: { value: 'Child' } })
+    fireEvent.click(screen.getByRole('option', { name: 'Child Family' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    expect(await screen.findByRole('button', { name: 'Remove connection with Child Family' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove connection with Child Family' }))
+
+    expect(window.confirm).toHaveBeenCalledWith('Remove this connection? The people will not be deleted.')
+    expect(screen.queryByRole('button', { name: 'Remove connection with Child Family' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Parent Family' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Child Family' })).toBeInTheDocument()
+  })
+
   it('lets an admin create and inspect a person without persisting the archive', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 404 })))
     vi.spyOn(window, 'confirm').mockReturnValue(true)
@@ -246,6 +279,10 @@ describe('family tree interface', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Ada Lovelace' }))
     fireEvent.click(screen.getByRole('button', { name: 'Add a connection' }))
+    const personPicker = screen.getByRole('combobox', { name: 'Person' })
+    fireEvent.change(personPicker, { target: { value: 'Bea' } })
+    fireEvent.keyDown(personPicker, { key: 'ArrowDown' })
+    fireEvent.keyDown(personPicker, { key: 'Enter' })
     fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
     expect(screen.getByRole('heading', { name: 'Children' })).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /Bea Lovelace/ })

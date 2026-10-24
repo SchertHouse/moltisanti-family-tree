@@ -13,11 +13,14 @@ Stato verificato per l'implementazione corrente; non sostituisce l'esecuzione de
 - [x] Normalizzazione immagini configurabile (massimo iniziale 1200 × 1200), cifratura individuale, varianti generate on demand, concorrenza limitata e cache IndexedDB cifrata con fallback volatile e controllo UI.
 - [x] Layout genealogico raggruppato: partner compatibili allineati, figli organizzati per insieme di genitori, coordinate basate sulle larghezze reali e sugli endpoint effettivi delle relazioni, livelli ordinati per ridurre gli incroci e archi familiari ortogonali condivisi.
 - [x] Mantenere contigui nel layout i fratelli con lo stesso insieme di genitori, evitando connettori che attraversino rami estranei.
+- [x] Convergenza iterativa di ordinamento e posizioni, con passaggi direzionali e test di allineamento per famiglie ramificate.
+- [x] Selezione ricercabile e navigabile da tastiera della persona nel modulo per aggiungere legami.
 - [x] Prima interfaccia responsive per consultazione, ricerca, gestione locale e relazioni.
 - [x] Visualizzazione fullscreen dell'area dell'albero con uscita tramite pulsante o tasto Escape.
 - [x] Traduzioni `it`, `en`, `eo` e documentazione di architettura e sicurezza.
 - [x] Deduplicazione dell'elenco fratelli/sorelle quando condividono più di un genitore.
 - [x] Ricerca dei fratelli/sorelle deduplicata per ID persona, mantenendo l'ordine di prima apparizione.
+- [x] Rimozione amministrativa dei singoli legami familiari con conferma, senza eliminare le persone coinvolte.
 
 ## Da completare
 

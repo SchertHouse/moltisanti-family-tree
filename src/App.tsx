@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type PointerEvent } from 'react'
 import {
   BookOpen, Check, ChevronDown, CircleHelp, Download, FileLock2, Heart, KeyRound, LoaderCircle,
   Languages, LockKeyhole, Mail, Maximize, Maximize2, Minimize, Minus, MousePointer2, Pencil, Plus,
@@ -18,7 +18,7 @@ import { browserLanguage, translate, type Language } from './i18n'
 import { dateInputPattern, formatCalendarDate, formatDate, formatDateInput, parseDateInput } from './dateInput'
 import {
   birthdayInfo, emptyArchive, generationMap, relationTo, treePositions, validateArchive,
-  uniquePeople, type FamilyArchive, type Person, type RelationshipType,
+  uniquePeople, type FamilyArchive, type Person, type Relationship, type RelationshipType,
 } from './model'
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'moltisantitree'
@@ -47,6 +47,7 @@ function App() {
   const [pendingArchive, setPendingArchive] = useState<FamilyArchive | null>(null)
   const [pendingPassphrase, setPendingPassphrase] = useState('')
   const [editing, setEditing] = useState<Person | null>(null)
+  const [relationshipPersonId, setRelationshipPersonId] = useState('')
   const [cropFile, setCropFile] = useState<File | null>(null)
   const [croppedPhoto, setCroppedPhoto] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -127,14 +128,18 @@ function App() {
     }))
   }, [archive])
 
-  const relationships = (personId: string, type: RelationshipType, direction?: 'in' | 'out') => archive.relationships
+  const relationshipEntries = (personId: string, type: RelationshipType, direction?: 'in' | 'out') => archive.relationships
     .filter((relationship) => relationship.type === type &&
       (direction === 'in' ? relationship.to === personId : direction === 'out'
         ? relationship.from === personId
         : relationship.from === personId || relationship.to === personId))
-    .map((relationship) => archive.people.find((person) =>
-      person.id === (relationship.from === personId ? relationship.to : relationship.from)))
-    .filter((person): person is Person => Boolean(person))
+    .flatMap((relationship) => {
+      const person = archive.people.find((candidate) =>
+        candidate.id === (relationship.from === personId ? relationship.to : relationship.from))
+      return person ? [{ person, relationship }] : []
+    })
+  const relationships = (personId: string, type: RelationshipType, direction?: 'in' | 'out') =>
+    relationshipEntries(personId, type, direction).map(({ person }) => person)
 
   const selectPlainArchive = async (file: File | undefined, input: HTMLInputElement) => {
     if (!file) return
@@ -538,12 +543,24 @@ function App() {
     event.preventDefault()
     if (!selected) return
     const data = new FormData(event.currentTarget)
+    const otherPersonId = String(data.get('person') ?? '')
+    if (!otherPersonId) {
+      setNotice(t('selectPersonRequired'))
+      return
+    }
     try {
-      setArchive(relationTo(archive, selected.id, data.get('type') as RelationshipType, String(data.get('person'))))
+      setArchive(relationTo(archive, selected.id, data.get('type') as RelationshipType, otherPersonId))
       setModal(null)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : t('error'))
     }
+  }
+  const removeRelationship = (relationship: Relationship) => {
+    if (!window.confirm(t('removeRelationshipConfirm'))) return
+    setArchive((current) => ({
+      ...current,
+      relationships: current.relationships.filter((item) => item.id !== relationship.id),
+    }))
   }
   const removeSelected = () => {
     if (!selected || !window.confirm(t('removeConfirm'))) return
@@ -692,13 +709,19 @@ function App() {
       setBusyAction(null)
     }
   }
-  const familyList = (title: string, people: Person[]) => people.length > 0 && (
+  const familyList = (title: string, entries: Array<{ person: Person; relationship?: Relationship }>) => entries.length > 0 && (
     <section className="family-list">
       <h3>{title}</h3>
-      {people.map((person) => <button key={person.id} className="relative-person" onClick={() => selectPerson(person.id)}>
-        <span className="mini-avatar">{person.firstName.slice(0, 1)}{person.lastName.slice(0, 1)}</span>
-        {person.firstName} {person.lastName}
-      </button>)}
+      {entries.map(({ person, relationship }) => <div key={relationship?.id ?? person.id} className="family-person-row">
+        <button className="relative-person" onClick={() => selectPerson(person.id)}>
+          <span className="mini-avatar">{person.firstName.slice(0, 1)}{person.lastName.slice(0, 1)}</span>
+          {person.firstName} {person.lastName}
+        </button>
+        {admin && relationship && <button className="remove-relationship icon-button"
+          aria-label={t('removeRelationship', { name: `${person.firstName} ${person.lastName}` })}
+          title={t('removeRelationship', { name: `${person.firstName} ${person.lastName}` })}
+          onClick={() => removeRelationship(relationship)}><Trash2 size={15} /></button>}
+      </div>)}
     </section>
   )
 
@@ -914,12 +937,12 @@ function App() {
               </div>
             </div>
             <section className="family-block"><h3><Users size={15} />{t('family')}</h3>
-              {familyList(t('parents'), relationships(selected.id, 'parent-child', 'in'))}
-              {familyList(t('children'), relationships(selected.id, 'parent-child', 'out'))}
-              {familyList(t('partners'), relationships(selected.id, 'partner'))}
+              {familyList(t('parents'), relationshipEntries(selected.id, 'parent-child', 'in'))}
+              {familyList(t('children'), relationshipEntries(selected.id, 'parent-child', 'out'))}
+              {familyList(t('partners'), relationshipEntries(selected.id, 'partner'))}
               {familyList(t('siblings'), uniquePeople(relationships(selected.id, 'parent-child', 'in').flatMap((parent) =>
                 relationships(parent.id, 'parent-child', 'out').filter((child) => child.id !== selected.id))
-              ))}
+              ).map((person) => ({ person })))}
               {relationships(selected.id, 'parent-child').length === 0 && relationships(selected.id, 'partner').length === 0 &&
                 <p className="muted-copy">{t('noFamilyConnections')}</p>}
             </section>
@@ -939,7 +962,10 @@ function App() {
                 {selected.whatsapp && /^\+?[0-9\s().-]{7,20}$/.test(selected.whatsapp) && <a className="contact-button" target="_blank" rel="noreferrer" href={`https://wa.me/${selected.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(t('greetingWhatsApp', { name: selected.firstName }))}`}><Heart size={16} />{t('whatsapp')}</a>}
               </div>
               {admin && <div className="admin-tools"><button className="button button-danger" onClick={removeSelected}>{t('remove')}</button>
-                {archive.people.length > 1 && <button className="button button-light" onClick={() => setModal('relationship')}><Users size={15} />{t('relationship')}</button>}
+                {archive.people.length > 1 && <button className="button button-light" onClick={() => {
+                  setRelationshipPersonId('')
+                  setModal('relationship')
+                }}><Users size={15} />{t('relationship')}</button>}
               </div>}
             </div>
           </> : <div className="detail-empty"><div className="detail-empty-icon"><CircleHelp size={25} /></div><h3>{t('family')}</h3><p>{t('selectPerson')}</p></div>}
@@ -1063,8 +1089,14 @@ function App() {
           {modal === 'relationship' && selected && <><div className="modal-symbol"><Users size={23} /></div><h2 id="modal-title">{t('relationship')}</h2>
             <form className="form-stack" onSubmit={onAddRelationship}>
               <label>{t('relationshipType')}<select name="type"><option value="parent-child">{t('parentChild')}</option><option value="partner">{t('partner')}</option></select></label>
-              <label>{t('person')}<select name="person" required>{archive.people.filter((person) => person.id !== selected.id).map((person) =>
-                <option key={person.id} value={person.id}>{person.firstName} {person.lastName}</option>)}</select></label>
+              <PersonSearchPicker
+                people={archive.people.filter((person) => person.id !== selected.id)}
+                value={relationshipPersonId}
+                onChange={setRelationshipPersonId}
+                label={t('person')}
+                placeholder={t('searchPerson')}
+                noResults={t('noPeopleFound')}
+              />
               <p className="form-note">{t('parentRelationshipHint')}</p>
               <div className="modal-actions"><button type="button" className="button button-light" onClick={() => setModal(null)}>{t('cancel')}</button><button className="button button-primary">{t('confirm')}</button></div>
             </form></>}
@@ -1108,6 +1140,99 @@ function App() {
       </div>}
     </main>
   )
+}
+
+interface PersonSearchPickerProps {
+  people: Person[]
+  value: string
+  onChange: (personId: string) => void
+  label: string
+  placeholder: string
+  noResults: string
+}
+
+function PersonSearchPicker({
+  people,
+  value,
+  onChange,
+  label,
+  placeholder,
+  noResults,
+}: PersonSearchPickerProps) {
+  const id = useId()
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const selected = people.find((person) => person.id === value)
+  const options = people.filter((person) =>
+    `${person.firstName} ${person.lastName}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
+  const choose = (person: Person) => {
+    onChange(person.id)
+    setQuery('')
+    setOpen(false)
+  }
+
+  return <div className="relationship-picker">
+    <label htmlFor={id}>{label}</label>
+    <input
+      id={id}
+      role="combobox"
+      aria-autocomplete="list"
+      aria-expanded={open}
+      aria-controls={`${id}-options`}
+      aria-activedescendant={open && options[activeIndex] ? `${id}-option-${activeIndex}` : undefined}
+      aria-required="true"
+      autoComplete="off"
+      value={open ? query : selected ? `${selected.firstName} ${selected.lastName}` : query}
+      placeholder={placeholder}
+      onFocus={() => {
+        setQuery('')
+        setActiveIndex(0)
+        setOpen(true)
+      }}
+      onChange={(event) => {
+        setQuery(event.target.value)
+        onChange('')
+        setActiveIndex(0)
+        setOpen(true)
+      }}
+      onBlur={() => setOpen(false)}
+      onKeyDown={(event) => {
+        if (event.key === 'ArrowDown') {
+          event.preventDefault()
+          setOpen(true)
+          setActiveIndex((index) => Math.max(0, Math.min(index + 1, options.length - 1)))
+        } else if (event.key === 'ArrowUp') {
+          event.preventDefault()
+          setActiveIndex((index) => Math.max(index - 1, 0))
+        } else if (event.key === 'Enter' && open && options[activeIndex]) {
+          event.preventDefault()
+          choose(options[activeIndex]!)
+        } else if (event.key === 'Escape') {
+          setOpen(false)
+        }
+      }}
+    />
+    <input type="hidden" name="person" value={value} />
+    {open && <div id={`${id}-options`} className="relationship-picker-options" role="listbox">
+      {options.length > 0 ? options.map((person, index) => (
+        <button
+          id={`${id}-option-${index}`}
+          key={person.id}
+          type="button"
+          role="option"
+          aria-label={`${person.firstName} ${person.lastName}`}
+          aria-selected={person.id === value}
+          className={index === activeIndex ? 'active' : ''}
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={() => choose(person)}
+        >
+          <span className="mini-avatar">{person.firstName.slice(0, 1)}{person.lastName.slice(0, 1)}</span>
+          <span>{person.firstName} {person.lastName}</span>
+        </button>
+      )) : <p>{noResults}</p>}
+    </div>}
+  </div>
 }
 
 export default App

@@ -177,4 +177,88 @@ describe('family tree layout', () => {
 
     expect(parentCenter).toBe(childrenCenter)
   })
+
+  it('keeps a parent centered over many children while converging the layout', () => {
+    const archive = emptyArchive()
+    archive.people = [
+      { id: 'father', firstName: 'Adam', lastName: 'Family' },
+      ...Array.from({ length: 18 }, (_, index) => ([
+        { id: `child-${index}`, firstName: `Child${index}`, lastName: 'Family' },
+        { id: `partner-${index}`, firstName: `Partner${index}`, lastName: 'Family' },
+      ])).flat(),
+    ]
+    archive.relationships = Array.from({ length: 18 }, (_, index) => ([
+      { id: `parent-${index}`, type: 'parent-child' as const, from: 'father', to: `child-${index}` },
+      { id: `partner-${index}`, type: 'partner' as const, from: `child-${index}`, to: `partner-${index}` },
+    ])).flat()
+
+    const positions = treePositions(archive)
+    const meanChildX = Array.from({ length: 18 }, (_, index) => positions.get(`child-${index}`)!.x)
+      .reduce((total, x) => total + x, 0) / 18
+
+    expect(Math.abs(positions.get('father')!.x - meanChildX)).toBeLessThan(1)
+  })
+
+  it('centers Marilena and her partner over their children in a wide sibling tree', () => {
+    const archive = emptyArchive()
+    const people = new Map<string, { id: string; firstName: string; lastName: string }>()
+    const relationships = archive.relationships
+    const addPerson = (id: string) => {
+      const [firstName, ...lastName] = id.split('-')
+      people.set(id, { id, firstName: firstName!, lastName: lastName.join(' ') || 'Family' })
+    }
+    const addPartner = (first: string, second: string) => {
+      relationships.push({ id: `partner-${first}-${second}`, type: 'partner', from: first, to: second })
+    }
+    const addChild = (parent: string, child: string) => {
+      relationships.push({ id: `parent-${parent}-${child}`, type: 'parent-child', from: parent, to: child })
+    }
+    const families = [
+      ['marilena', 'andrea-bertolino', ['lucilla', 'gianna', 'manuela']],
+      ['daniela', 'luigi-mortellaro', ['domenico', 'arianna']],
+      ['piera', 'rosario-garofalo', ['mario', 'ilaria', 'valeria', 'giuliana', 'eleonora']],
+      ['concetta', 'antonio-russo', ['gabriella', 'piergiorgio', 'alessandra', 'gianfranco', 'simonetta']],
+      ['antonino', 'anna-cognome', ['tea']],
+      ['silvana', 'giuseppe-genovese', ['andrea-genovese', 'giulio-genovese', 'marina', 'marco']],
+    ] as const
+    addPerson('matteo-moltisanti')
+    addPerson('giovanna-gennaro')
+    addPartner('matteo-moltisanti', 'giovanna-gennaro')
+    for (const [sibling, partner, children] of families) {
+      addPerson(sibling)
+      addPerson(partner)
+      addPartner(sibling, partner)
+      addChild('matteo-moltisanti', sibling)
+      addChild('giovanna-gennaro', sibling)
+      for (const child of children) {
+        addPerson(child)
+        addChild(sibling, child)
+        addChild(partner, child)
+      }
+    }
+    for (const child of [...families[0][2], ...families[2][2].slice(0, 2)]) {
+      const partner = `partner-${child}`
+      addPerson(partner)
+      addPartner(child, partner)
+      for (let index = 0; index < 2; index += 1) {
+        const grandchild = `${child}-child-${index}`
+        addPerson(grandchild)
+        addChild(child, grandchild)
+        addChild(partner, grandchild)
+      }
+    }
+    archive.people = [...people.values()]
+
+    const positions = treePositions(archive)
+    const parentCenter = (positions.get('marilena')!.x + positions.get('andrea-bertolino')!.x) / 2
+    const children = families[0][2]
+    const childrenCenter = children.reduce((total, id) => total + positions.get(id)!.x, 0) / children.length
+
+    expect(Math.abs(parentCenter - childrenCenter)).toBeLessThan(1)
+    expect(positions.get('mario')!.y).toBe(positions.get('lucilla')!.y)
+    expect(positions.get('mario')!.x).toBeGreaterThan(
+      Math.max(...children.map((id) => positions.get(id)!.x)) + 80,
+    )
+  })
+
 })
