@@ -1,0 +1,26 @@
+# Roadmap
+
+Stato verificato per l'implementazione corrente; non sostituisce l'esecuzione dei test dell'ambiente CI.
+
+## Implementato
+
+- [x] Scaffold SPA React/Vite con TypeScript strict e CI GitHub Pages.
+- [x] Modello versione 1, validazione, archivio AES-256-GCM/PBKDF2, import con riepilogo e export JSON cifrato/in chiaro con conferma.
+- [x] Caricamento automatico dell'archivio cifrato pubblicato nel percorso previsto e controllo degli asset in build.
+- [x] Pubblicazione GitHub Contents dell'archivio cifrato singolo con SHA per aggiornamento e segnalazione conflitti.
+- [x] Ritaglio quadrato delle fotografie prima di associarle a un profilo.
+- [x] Normalizzazione immagini configurabile (massimo iniziale 1200 × 1200), cifratura individuale, varianti generate on demand, concorrenza limitata e cache IndexedDB cifrata con fallback volatile e controllo UI.
+- [x] Prima interfaccia responsive per consultazione, ricerca, gestione locale e relazioni.
+- [x] Traduzioni `it`, `en`, `eo` e documentazione di architettura e sicurezza.
+
+## Da completare
+
+- [ ] Test E2E reali multi-browser e touch su dispositivi.
+- [ ] Import/export ZIP e anteprima differenze prima dell'import.
+- [ ] Riepilogo per date di compleanno parziali (le date complete includono il calcolo dell'anno bisestile).
+- [ ] Gallerie fotografiche per profilo (il ritaglio quadrato della foto principale è implementato).
+- [ ] Audit accessibilità, prestazioni su alberi grandi e threat review prima del rilascio.
+
+## Limitazioni
+
+Base iniziale senza dati demo per non rischiare di distribuire dati personali. Verifiche locali dipendono da Node/npm; la CI è il gate per la pubblicazione. L'API Contents pubblica un singolo archivio e non fornisce transazioni.

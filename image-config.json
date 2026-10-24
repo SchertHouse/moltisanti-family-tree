@@ -1,0 +1,32 @@
+{
+  "input": {
+    "maxFileBytes": 8388608,
+    "mimeTypes": [
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+      "image/gif",
+      "image/avif"
+    ]
+  },
+  "normalized": {
+    "maxWidth": 1200,
+    "maxHeight": 1200,
+    "format": "image/jpeg",
+    "quality": 0.9
+  },
+  "variants": {
+    "tree": 128,
+    "profile": 800
+  },
+  "processing": {
+    "algorithmVersion": 1,
+    "maxConcurrent": 2
+  },
+  "cache": {
+    "maxEntries": 200,
+    "maxBytes": 31457280,
+    "databaseName": "moltisanti-image-cache",
+    "storeName": "variants"
+  }
+}

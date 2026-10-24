@@ -1,0 +1,11 @@
+# Modello dati e archivio
+
+Schema logico `FamilyArchive` versionato: `schemaVersion`, array `people`, array `relationships`. Le persone hanno ID stabile, nome, cognome, date ISO (anche parziali se valide), luogo, biografia, contatti, fotografia principale, note e fonti. La foto viene ritagliata nel browser, orientata secondo EXIF quando supportato e normalizzata come singolo JPEG quadrato prima dell'associazione. Il file sorgente resta solo in memoria fino alla chiusura dell'editor.
+
+`photo` è associata all'ID stabile della persona e, nell'archivio cifrato, contiene un envelope immagine AES-GCM versionato, con salt e IV propri. L'apertura dell'archivio lascia il ciphertext della foto intatto; la decifratura avviene solo quando una variante è richiesta dalla UI. Le vecchie immagini raster in data URL sono accettate per compatibilità, centrate in un quadrato, normalizzate e convertite in envelope cifrato al prossimo salvataggio. Per rispettare il vincolo di una sola fotografia per persona, un archivio importato con galleria non vuota viene preservato ma non può essere salvato/pubblicato finché le immagini aggiuntive non sono risolte; non vengono eliminate silenziosamente. Le varianti derivate non appartengono al modello né all'archivio.
+
+La configurazione versionata in `image-config.json` è la fonte autorevole dei limiti: file in ingresso massimo 8 MiB; output massimo iniziale **1200 × 1200 pixel**, nessun ingrandimento artificiale, formato JPEG e qualità predefinita 0.9. La stessa configurazione definisce le varianti (128 px albero, massimo 800 px scheda), massimo 2 elaborazioni simultanee e cache con massimo 200 voci/30 MiB.
+
+Relazioni tipizzate `parent-child` e `partner` sono indipendenti; il partner non diventa automaticamente genitore. Il validatore verifica versione, ID univoci, date valide, riferimenti esistenti, tipi ammessi e cicli genitoriali.
+
+Il file persistito è un envelope JSON pubblico contenente versione formato, algoritmo AES-256-GCM, PBKDF2-SHA-256, iterazioni, salt, IV e ciphertext Base64. Chiave/passphrase mai incluse. Il tag GCM è incorporato nel ciphertext. Le immagini sono ulteriormente cifrate individualmente prima di essere inserite nel JSON. Cambi di schema richiedono migrazione esplicita.

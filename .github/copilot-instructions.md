@@ -1,0 +1,1 @@
+Leggere prima `/AGENTS.md` e i documenti pertinenti in `/docs`. Seguire i requisiti di sicurezza e non dichiarare completate le funzionalità non implementate. Non memorizzare passphrase, token o dati personali in storage browser o log. Aggiornare la documentazione e roadmap con le modifiche.
