@@ -10,6 +10,7 @@ Stato verificato per l'implementazione corrente; non sostituisce l'esecuzione de
 - [x] Pubblicazione GitHub Contents dell'archivio cifrato singolo con SHA per aggiornamento e segnalazione conflitti.
 - [x] Ritaglio quadrato delle fotografie prima di associarle a un profilo.
 - [x] Normalizzazione immagini configurabile (massimo iniziale 1200 × 1200), cifratura individuale, varianti generate on demand, concorrenza limitata e cache IndexedDB cifrata con fallback volatile e controllo UI.
+- [x] Layout genealogico raggruppato: partner compatibili allineati, figli organizzati per insieme di genitori, livelli ordinati per ridurre gli incroci e archi familiari ortogonali condivisi.
 - [x] Prima interfaccia responsive per consultazione, ricerca, gestione locale e relazioni.
 - [x] Traduzioni `it`, `en`, `eo` e documentazione di architettura e sicurezza.
 

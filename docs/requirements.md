@@ -8,6 +8,7 @@ Consultazione e gestione responsive di un albero genealogico privato, pubblicabi
 
 - Albero interattivo, schede persona, ricerca e filtri per generazione.
 - Relazioni genitore-figlio e partner indipendenti.
+- Nel layout, allineare i partner quando compatibile con le generazioni, raggruppare i figli per genitori comuni e ridurre gli incroci con connettori familiari condivisi; preservare i dati originali nei casi incompatibili.
 - Modifica Admin separata dalla consultazione Viewer.
 - Prima di associare una fotografia a una persona, mostrare un editor di ritaglio quadrato utilizzabile con mouse e touch, con anteprima, spostamento e ridimensionamento della selezione. Correggere l'orientamento EXIF se supportato dal browser, normalizzare nel browser e non conservare i metadati originali. Validare tipo e dimensione in ingresso in base alla configurazione.
 - Normalizzare le immagini in JPEG nel browser, senza ingrandirle, con un massimo iniziale di **1200 × 1200 pixel**. `image-config.json` è la fonte versionata e autorevole per limiti, qualità, varianti e cache, ed è modificabile senza cambiare il codice applicativo.

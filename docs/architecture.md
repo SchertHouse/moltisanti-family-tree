@@ -2,7 +2,7 @@
 
 La pagina React/Vite è una SPA statica ospitabile su GitHub Pages. Il client carica automaticamente `public/family-archive.enc.json` quando presente, chiede la passphrase a ogni caricamento, decifra con Web Crypto e gestisce temporaneamente i dati in memoria. Può cifrare e scaricare o pubblicare l'archivio. Le relazioni sono dati espliciti e non dedotti dai partner.
 
-Il grafo viene rappresentato con SVG e layout deterministico per generazioni; pan/zoom sono gestiti dalla vista. I moduli per modello, validazione, crittografia e API sono separati dall'interfaccia.
+Il grafo viene rappresentato con SVG e layout deterministico per generazioni. Le relazioni partner sono raggruppate prima del calcolo dei livelli quando il vincolo resta compatibile con l'ordine genitore-figlio e non introduce cicli; i casi incompatibili conservano la precedenza delle relazioni genitoriali. Il posizionamento tiene unite le coppie, dispone i figli per nucleo di genitori e riordina iterativamente i gruppi secondo la posizione dei genitori e dei figli per ridurre gli incroci. Gli archi genitore-figlio condividono connettori ortogonali per nuclei familiari; i legami partner sono orizzontali quando i nodi sono allineati. Pan, zoom e gesture touch sono gestiti dalla vista. I moduli per modello, validazione, crittografia e API sono separati dall'interfaccia.
 
 `image-config.json` centralizza i limiti di input, l'output normalizzato massimo di 1200 × 1200, la qualità JPEG, le dimensioni delle varianti (albero 128, scheda 800), la concorrenza e i limiti cache. Il ritaglio e l'orientamento EXIF sono elaborati nel browser. Il canvas crea una sola immagine quadrata JPEG normalizzata per persona, senza metadati EXIF/GPS.
 

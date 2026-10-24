@@ -16,6 +16,8 @@ SPA statica React + TypeScript strict + Vite. L'archivio JSON versionato viene c
 
 Usare TypeScript strict, componenti React funzionali e CSS responsive. Stato e chiavi sensibili restano in memoria; non usare storage persistente per token, passphrase o dati personali. Non loggare dati sensibili. Identificativi indipendenti dai nomi; persone e relazioni sono entità distinte. Validare gli archivi prima di usarli.
 
+Il layout dell'albero deve essere deterministico: allineare partner solo quando il vincolo è compatibile con le generazioni genitore-figlio, tenere vicini i figli con lo stesso insieme di genitori e ridurre gli incroci con un riordino dei gruppi. I collegamenti familiari condividono connettori ortogonali senza alterare il modello relazionale.
+
 Centralizzare i testi dell'interfaccia nelle traduzioni `it`, `en`, `eo`, mantenendo fallback inglese e test di parità. Formattare date con API `Intl`.
 
 ## Immagini

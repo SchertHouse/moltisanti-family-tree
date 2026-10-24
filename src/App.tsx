@@ -106,6 +106,26 @@ function App() {
   const relatedIds = new Set(selected ? archive.relationships
     .filter((relationship) => relationship.from === selected.id || relationship.to === selected.id)
     .flatMap((relationship) => [relationship.from, relationship.to]) : [])
+  const familyConnectors = useMemo(() => {
+    const families = new Map<string, { parentIds: string[]; childIds: string[] }>()
+    const parentsByChild = new Map<string, string[]>()
+    for (const relationship of archive.relationships) {
+      if (relationship.type !== 'parent-child') continue
+      parentsByChild.set(relationship.to, [...new Set([...(parentsByChild.get(relationship.to) ?? []), relationship.from])])
+    }
+    for (const [childId, unsortedParentIds] of parentsByChild) {
+      const parentIds = [...unsortedParentIds].sort()
+      const key = JSON.stringify(parentIds)
+      const family = families.get(key) ?? { parentIds, childIds: [] }
+      family.childIds.push(childId)
+      families.set(key, family)
+    }
+    return [...families.entries()].map(([key, family]) => ({
+      key,
+      parentIds: family.parentIds,
+      childIds: [...new Set(family.childIds)].sort(),
+    }))
+  }, [archive])
 
   const relationships = (personId: string, type: RelationshipType, direction?: 'in' | 'out') => archive.relationships
     .filter((relationship) => relationship.type === type &&
@@ -247,7 +267,7 @@ function App() {
 
   const startDrag = (event: PointerEvent<SVGSVGElement>) => {
     if (event.button !== 0) return
-    event.currentTarget.setPointerCapture(event.pointerId)
+    if (event.pointerType !== 'touch') event.currentTarget.setPointerCapture(event.pointerId)
     const rect = event.currentTarget.getBoundingClientRect()
     pointers.current.set(event.pointerId, { x: event.clientX - rect.left, y: event.clientY - rect.top })
     if (pointers.current.size === 2) {
@@ -618,16 +638,40 @@ function App() {
               <svg ref={canvasRef} className="tree-canvas" role="group" aria-label={`${t('brand')} — ${archive.people.length} persone`}
                 onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
                 <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
-                  {archive.relationships.map((relationship) => {
+                  {familyConnectors.map(({ key, parentIds, childIds }) => {
+                    if (![...parentIds, ...childIds].every((id) => filtered.some((person) => person.id === id))) return null
+                    const parentPoints = parentIds.map((id) => positions.get(id)).filter((point) => point !== undefined)
+                    const childPoints = childIds.map((id) => positions.get(id)).filter((point) => point !== undefined)
+                    if (parentPoints.length === 0 || childPoints.length === 0) return null
+                    const parentLeft = Math.min(...parentPoints.map((point) => point.x))
+                    const parentRight = Math.max(...parentPoints.map((point) => point.x))
+                    const parentCenter = (parentLeft + parentRight) / 2
+                    const childLeft = Math.min(...childPoints.map((point) => point.x))
+                    const childRight = Math.max(...childPoints.map((point) => point.x))
+                    const parentBottom = Math.max(...parentPoints.map((point) => point.y + 54))
+                    const childTop = Math.min(...childPoints.map((point) => point.y - 54))
+                    const parentsBusY = (parentBottom + childTop) / 2
+                    const childrenBusY = childTop - 12
+                    const parentBranches = parentPoints.map((point) => `M ${point.x} ${point.y + 54} L ${point.x} ${parentsBusY}`).join(' ')
+                    const parentsBus = parentPoints.length > 1 ? `M ${parentLeft} ${parentsBusY} L ${parentRight} ${parentsBusY}` : ''
+                    const familyTrunk = `M ${parentCenter} ${parentsBusY} L ${parentCenter} ${childrenBusY} L ${childLeft} ${childrenBusY}`
+                    const childrenBus = childPoints.length > 1 ? `L ${childRight} ${childrenBusY}` : ''
+                    const childBranches = childPoints.map((point) =>
+                      `M ${point.x} ${childrenBusY} L ${point.x} ${point.y - 54}`).join(' ')
+                    return <path key={key} className="family-line"
+                      d={`${parentBranches} ${parentsBus} ${familyTrunk} ${childrenBus} ${childBranches}`} />
+                  })}
+                  {archive.relationships.filter((relationship) => relationship.type === 'partner').map((relationship) => {
                     const from = positions.get(relationship.from)
                     const to = positions.get(relationship.to)
                     if (!from || !to || !filtered.some((p) => p.id === relationship.from) || !filtered.some((p) => p.id === relationship.to)) return null
-                    const partner = relationship.type === 'partner'
+                    const direction = to.x >= from.x ? 1 : -1
+                    const path = from.y === to.y
+                      ? `M ${from.x + direction * 80} ${from.y} L ${to.x - direction * 80} ${to.y}`
+                      : `M ${from.x + direction * 80} ${from.y} C ${from.x + direction * 105} ${from.y - 15}, ${to.x - direction * 105} ${to.y - 15}, ${to.x - direction * 80} ${to.y}`
                     return <g key={relationship.id}>
-                      <path className={partner ? 'partner-line' : 'family-line'} d={partner
-                        ? `M ${from.x + (to.x >= from.x ? 80 : -80)} ${from.y} C ${from.x + (to.x >= from.x ? 105 : -105)} ${from.y - 15}, ${to.x - (to.x >= from.x ? 80 : -80)} ${to.y - 15}, ${to.x - (to.x >= from.x ? 80 : -80)} ${to.y}`
-                        : `M ${from.x} ${from.y + 54} C ${from.x} ${(from.y + to.y) / 2}, ${to.x} ${(from.y + to.y) / 2}, ${to.x} ${to.y - 54}`} />
-                      {partner && <Heart className="partner-heart" x={(from.x + to.x) / 2 - 6} y={from.y - 17} size={12} />}
+                      <path className="partner-line" d={path} />
+                      <Heart className="partner-heart" x={(from.x + to.x) / 2 - 6} y={(from.y + to.y) / 2 - 6} size={12} />
                     </g>
                   })}
                   {filtered.map((person) => {
@@ -639,7 +683,9 @@ function App() {
                       <g role="button" tabIndex={0}
                         aria-label={`${person.firstName} ${person.lastName}${years ? `, ${years}` : ''}`} aria-pressed={active}
                         className={`person-node ${active ? 'selected' : ''} ${selectedId && !active && !connected ? 'dimmed' : ''}`}
-                        onPointerDown={(event) => event.stopPropagation()}
+                        onPointerDown={(event) => {
+                          if (event.pointerType !== 'touch') event.stopPropagation()
+                        }}
                         onClick={(event) => {
                           event.stopPropagation()
                           if (suppressClick.current) { suppressClick.current = false; return }
@@ -657,7 +703,9 @@ function App() {
                       {admin && <g transform="translate(146 14)" role="button" tabIndex={0}
                         aria-label={`${t('editPerson')}: ${person.firstName} ${person.lastName}`}
                         className="node-edit-button"
-                        onPointerDown={(event) => event.stopPropagation()}
+                        onPointerDown={(event) => {
+                          if (event.pointerType !== 'touch') event.stopPropagation()
+                        }}
                         onClick={(event) => { event.stopPropagation(); editPerson(person) }}
                         onKeyDown={(event) => {
                           event.stopPropagation()

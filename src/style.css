@@ -163,7 +163,7 @@ h1 { font: 800 30px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; letter-spacin
 .dock-title strong { font: 700 11px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; }
 .dock-title small { color: #829081; font-size: 9px; margin-top: 3px; }
 .dock-actions { display: flex; gap: 8px; }
-.notice { position: fixed; z-index: 20; left: 50%; bottom: 25px; transform: translateX(-50%); min-width: 260px; max-width: min(90vw, 600px); display: flex; gap: 10px; align-items: center; padding: 12px 14px; background: #314f37; color: #fff; border-radius: 11px; box-shadow: 0 10px 32px #15291d38; font-size: 12px; }
+.notice { position: fixed; z-index: 50; left: 50%; bottom: 25px; transform: translateX(-50%); min-width: 260px; max-width: min(90vw, 600px); display: flex; gap: 10px; align-items: center; padding: 12px 14px; background: #314f37; color: #fff; border-radius: 11px; box-shadow: 0 10px 32px #15291d38; font-size: 12px; }
 .notice button { margin-left: auto; border: 0; color: #fff; background: transparent; display: grid; place-items: center; padding: 3px; }
 .modal-backdrop { z-index: 30; position: fixed; inset: 0; display: flex; justify-content: center; align-items: center; overflow-y: auto; padding: 20px; background: #26312875; backdrop-filter: blur(3px); }
 .modal-card { position: relative; width: min(100%, 455px); max-height: min(92vh, 850px); overflow-y: auto; padding: 27px; border: 1px solid #ecece5; border-radius: 19px; background: #fffefa; box-shadow: 0 22px 70px #14231940; }
@@ -256,8 +256,8 @@ h1 { font: 800 30px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; letter-spacin
   .detail-body { padding: 15px 19px 21px; }
   .tree-footer { padding: 9px 12px; }
   .admin-dock { align-items: flex-start; flex-direction: column; }
-  .dock-actions { width: 100%; }
-  .dock-actions .button { flex: 1; }
+  .dock-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; gap: 7px; }
+  .dock-actions .button { width: 100%; min-width: 0; min-height: 40px; padding: 8px 6px; font-size: 10px; line-height: 1.3; text-align: center; }
 }
 @media (max-width: 440px) {
   .app-shell { padding-left: 10px; padding-right: 10px; }

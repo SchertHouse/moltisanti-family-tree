@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 
@@ -58,6 +58,10 @@ describe('family tree interface', () => {
     expect(screen.getByRole('heading', { name: 'Children' })).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /Bea Lovelace/ })
       .some((button) => button.classList.contains('relative-person'))).toBe(true)
+    const familyLine = document.querySelector('.family-line')
+    expect(familyLine).toBeInTheDocument()
+    expect(familyLine?.getAttribute('d')).toContain('L')
+    expect(familyLine?.getAttribute('d')).not.toContain('C')
 
     const childNode = screen.getByRole('button', { name: 'Bea Lovelace' })
     fireEvent.pointerDown(childNode, { pointerId: 1, button: 0, clientX: 20, clientY: 20 })
@@ -69,9 +73,29 @@ describe('family tree interface', () => {
       .some((button) => button.classList.contains('relative-person'))).toBe(true)
 
     const canvas = screen.getByRole('group', { name: /Moltisanti Family Tree/ })
+    const treeNode = canvas.querySelector('.person-node')
+    if (!treeNode) throw new Error('The family tree node is not available.')
+    const dispatchTouch = (target: Element, type: string, pointerId: number, clientX: number, clientY: number) => {
+      const event = createEvent(type, target, { bubbles: true, cancelable: true })
+      Object.defineProperties(event, {
+        pointerId: { value: pointerId },
+        pointerType: { value: 'touch' },
+        button: { value: 0 },
+        clientX: { value: clientX },
+        clientY: { value: clientY },
+      })
+      fireEvent(target, event)
+    }
+    dispatchTouch(treeNode, 'pointerdown', 1, 100, 100)
+    dispatchTouch(treeNode, 'pointerdown', 2, 120, 100)
+    dispatchTouch(canvas, 'pointermove', 2, 140, 100)
+    expect(screen.getByText('200%')).toBeInTheDocument()
+    dispatchTouch(canvas, 'pointerup', 1, 100, 100)
+    dispatchTouch(canvas, 'pointerup', 2, 140, 100)
+
     const wheelEvent = new WheelEvent('wheel', { deltaY: 100, cancelable: true, bubbles: true })
     act(() => canvas.dispatchEvent(wheelEvent))
     expect(wheelEvent.defaultPrevented).toBe(true)
-    expect(screen.getByText('90%')).toBeInTheDocument()
+    expect(screen.getByText('180%')).toBeInTheDocument()
   }, 10_000)
 })
