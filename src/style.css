@@ -47,7 +47,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .button-quiet { background: transparent; color: #596257; border-color: #e1e2db; }
 .image-cache-clear { flex: 0 0 auto; }
 .button-admin { color: #31583d; background: #e9f0e8; }
-.button-admin span { font-weight: 400; opacity: .8; }
+.button-admin-exit { font-weight: 400; opacity: .8; }
+.button-admin-exit::before { content: '· '; }
 .button-danger { background: #fff0ed; color: #a14f42; border-color: #f5d9d3; }
 .welcome-row { display: flex; align-items: center; justify-content: space-between; padding: 34px 0 28px; }
 .eyebrow { display: inline-flex; align-items: center; gap: 6px; color: #738b70; font-size: 9px; font-weight: 700; letter-spacing: 1.2px; }
@@ -247,6 +248,10 @@ h1 { font: 800 30px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; letter-spacin
   .brand small { display: none; }
   .header-actions { gap: 7px; }
   .header-actions .button { padding: 9px 10px; font-size: 10px; }
+  .header-actions .button-admin { display: grid; grid-template-columns: auto auto; column-gap: 5px; row-gap: 1px; justify-items: start; padding: 5px 8px; }
+  .button-admin > svg { grid-column: 1; grid-row: 1 / span 2; }
+  .button-admin-name, .button-admin-exit { grid-column: 2; line-height: 1.1; }
+  .button-admin-exit::before { content: none; }
   .image-cache-clear span { display: none; }
   .remembered-key-clear span { display: none; }
   .language-select { gap: 3px; }

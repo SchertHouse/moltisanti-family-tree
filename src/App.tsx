@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent } from 'react'
 import {
-  BookOpen, Check, ChevronDown, CircleHelp, Download, FileLock2, Heart, LoaderCircle,
+  BookOpen, Check, ChevronDown, CircleHelp, Download, FileLock2, Heart, KeyRound, LoaderCircle,
   Languages, LockKeyhole, Mail, Maximize, Maximize2, Minimize, Minus, MousePointer2, Pencil, Plus,
   Search, ShieldCheck, Sparkles, Trash2, Upload, UserRoundPlus, Users, X,
 } from 'lucide-react'
@@ -722,9 +722,12 @@ function App() {
           }}>{clearingImageCache ? <LoaderCircle className="button-spinner" size={15} /> : <Trash2 size={15} />}<span>{t('clearImageCache')}</span></button>
           {rememberedKeyAvailable && <button className="button button-quiet remembered-key-clear" aria-label={t('forgetRememberedKey')}
             title={t('forgetRememberedKey')} onClick={() => void forgetRememberedPassphrase()}>
-            <LockKeyhole size={15} /><span>{t('forgetRememberedKey')}</span>
+            <KeyRound size={15} /><span>{t('forgetRememberedKey')}</span>
           </button>}
-          {admin ? <button className="button button-admin" onClick={leaveAdmin}><ShieldCheck size={16} />{t('admin')} · <span>{t('exitAdmin')}</span></button>
+          {admin ? <button className="button button-admin" onClick={leaveAdmin}>
+            <ShieldCheck size={16} /><span className="admin-button-name">{t('admin')}</span>
+            <span className="admin-button-exit">{t('exitAdmin')}</span>
+          </button>
             : <button className="button button-quiet" onClick={enterAdmin}><LockKeyhole size={16} />{t('admin')}</button>}
         </div>
       </header>
