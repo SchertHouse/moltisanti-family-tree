@@ -1,11 +1,24 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 
 describe('family tree interface', () => {
   afterEach(() => {
+    cleanup()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+  })
+
+  it('fetches the published archive without reusing a stale cached copy', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 404 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByRole('button', { name: 'Admin' })
+    const [url, options] = fetchMock.mock.calls[0]!
+    expect(url).toMatch(/family-archive\.enc\.json\?v=\d+$/)
+    expect(options).toMatchObject({ cache: 'no-store' })
   })
 
   it('lets an admin create and inspect a person without persisting the archive', async () => {

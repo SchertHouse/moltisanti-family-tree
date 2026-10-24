@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent } from 'react'
 import {
-  BookOpen, Check, ChevronDown, CircleHelp, Download, FileLock2, Heart,
+  BookOpen, Check, ChevronDown, CircleHelp, Download, FileLock2, Heart, LoaderCircle,
   Languages, LockKeyhole, Mail, Maximize2, Minus, MousePointer2, Pencil, Plus, Search, ShieldCheck,
   Sparkles, Trash2, Upload, UserRoundPlus, Users, X,
 } from 'lucide-react'
@@ -25,6 +25,7 @@ const photoTypes = imageConfig.input.mimeTypes
 
 type Modal = 'admin' | 'key' | 'person' | 'relationship' | 'publish' | 'import-review' | null
 type View = { x: number; y: number; scale: number }
+type BusyAction = 'saving' | 'publishing' | 'exporting' | 'opening' | 'importing' | null
 
 function App() {
   const [language, setLanguage] = useState<Language>(browserLanguage)
@@ -46,6 +47,8 @@ function App() {
   const [generation, setGeneration] = useState('all')
   const [notice, setNotice] = useState('')
   const [clearingImageCache, setClearingImageCache] = useState(false)
+  const [busyAction, setBusyAction] = useState<BusyAction>(null)
+  const [loadingPublishedArchive, setLoadingPublishedArchive] = useState(true)
   const cacheFallbackNotified = useRef(false)
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 1 })
   const canvasRef = useRef<SVGSVGElement>(null)
@@ -67,7 +70,8 @@ function App() {
 
   useEffect(() => {
     const controller = new AbortController()
-    fetch(`${import.meta.env.BASE_URL}family-archive.enc.json`, { signal: controller.signal })
+    const archiveUrl = `${import.meta.env.BASE_URL}family-archive.enc.json?v=${Date.now()}`
+    fetch(archiveUrl, { cache: 'no-store', signal: controller.signal })
       .then(async (response) => {
         if (response.status === 404) return null
         if (!response.ok) throw new Error(`Archivio pubblicato non disponibile (HTTP ${response.status}).`)
@@ -85,6 +89,9 @@ function App() {
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === 'AbortError') return
         setNotice(error instanceof Error ? error.message : 'Impossibile caricare l’archivio pubblicato.')
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadingPublishedArchive(false)
       })
     return () => controller.abort()
   }, [])
@@ -111,6 +118,7 @@ function App() {
 
   const selectPlainArchive = async (file: File | undefined, input: HTMLInputElement) => {
     if (!file) return
+    setBusyAction('importing')
     try {
       if (file.size > 25 * 1024 * 1024) throw new Error(t('archiveTooLarge'))
       const parsed: unknown = JSON.parse(await file.text())
@@ -122,6 +130,7 @@ function App() {
       setNotice(error instanceof Error ? error.message : t('invalidArchiveFile'))
     } finally {
       input.value = ''
+      setBusyAction(null)
     }
   }
   const choosePhoto = (file: File | undefined, input: HTMLInputElement) => {
@@ -136,6 +145,7 @@ function App() {
   }
   const exportPlainArchive = async () => {
     if (!window.confirm(t('plainExportWarning'))) return
+    setBusyAction('exporting')
     try {
       const hasEncryptedPhotos = archive.people.some((person) =>
         [person.photo, ...(person.gallery ?? [])].some((image) => image && isEncryptedImage(image)))
@@ -145,6 +155,8 @@ function App() {
       setNotice(t('plainExported'))
     } catch (error) {
       setNotice(error instanceof Error ? error.message : t('exportFailure'))
+    } finally {
+      setBusyAction(null)
     }
   }
 
@@ -436,6 +448,7 @@ function App() {
       input.value = ''
       return
     }
+    setBusyAction('importing')
     try {
       setPendingEnvelope(JSON.parse(await file.text()) as unknown)
       setKeyPurpose('open')
@@ -444,9 +457,11 @@ function App() {
       setNotice(t('invalidArchiveFile'))
     } finally {
       input.value = ''
+      setBusyAction(null)
     }
   }
   const saveArchive = async (key: string) => {
+    setBusyAction('saving')
     try {
       validateArchive(archive)
       const prepared = await prepareArchivePhotos(archive, key, passphrase || key)
@@ -461,6 +476,8 @@ function App() {
       setNotice(keyChanged ? `${t('saved')} ${t('keyChangedNotice')}` : t('saved'))
     } catch (error) {
       setNotice(error instanceof Error ? error.message : t('saveFailure'))
+    } finally {
+      setBusyAction(null)
     }
   }
   const clearPhotoCache = async () => {
@@ -492,6 +509,7 @@ function App() {
       setNotice(t('passphraseRequired'))
       return
     }
+    setBusyAction('publishing')
     try {
       const prepared = await prepareArchivePhotos(archive, passphrase, passphrase)
       const encrypted = await encryptPreparedArchive(prepared, passphrase)
@@ -508,6 +526,8 @@ function App() {
       setModal(null)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : t('publishFailure'))
+    } finally {
+      setBusyAction(null)
     }
   }
   const familyList = (title: string, people: Person[]) => people.length > 0 && (
@@ -537,7 +557,7 @@ function App() {
           <button className="button button-quiet image-cache-clear" aria-label={t('clearImageCache')} title={t('clearImageCache')}
             disabled={clearingImageCache} onClick={() => {
             if (window.confirm(t('clearImageCacheConfirm'))) void clearPhotoCache()
-          }}><Trash2 size={15} /><span>{t('clearImageCache')}</span></button>
+          }}>{clearingImageCache ? <LoaderCircle className="button-spinner" size={15} /> : <Trash2 size={15} />}<span>{t('clearImageCache')}</span></button>
           {admin ? <button className="button button-admin" onClick={leaveAdmin}><ShieldCheck size={16} />{t('admin')} · <span>{t('exitAdmin')}</span></button>
             : <button className="button button-quiet" onClick={enterAdmin}><LockKeyhole size={16} />{t('admin')}</button>}
         </div>
@@ -577,12 +597,17 @@ function App() {
             </label>
           </div>
           <div className="tree-stage" ref={stageRef}>
+            {loadingPublishedArchive && <div className="archive-loading" role="status">
+              <LoaderCircle className="button-spinner" size={18} />{t('loadingPublishedArchive')}
+            </div>}
             {archive.people.length === 0 ? <div className="empty-state">
               <div className="empty-illustration"><span /><span /><span /><Heart size={28} /></div>
               <h2>{t('emptyTitle')}</h2><p>{t('emptyText')}</p>
               <div className="empty-actions">
-                <label className="button button-light"><Upload size={16} />{t('openArchive')}
-                  <input type="file" accept="application/json,.json" hidden onChange={(event) => {
+                <label className={`button button-light ${busyAction === 'importing' ? 'is-busy' : ''}`}>
+                  {busyAction === 'importing' ? <LoaderCircle className="button-spinner" size={15} /> : <Upload size={16} />}
+                  {busyAction === 'importing' ? t('importingArchive') : t('openArchive')}
+                  <input type="file" accept="application/json,.json" hidden disabled={busyAction !== null} onChange={(event) => {
                     void selectArchiveFile(event.currentTarget.files?.[0], event.currentTarget)
                   }} />
                 </label>
@@ -658,8 +683,10 @@ function App() {
               </div>
             </>}
             {archive.people.length > 0 && admin && <button className="floating-add" onClick={() => { setEditing(null); setCroppedPhoto(null); setModal('person') }}><Plus size={18} /><span>{t('addPerson')}</span></button>}
-            {archive.people.length > 0 && <label className="archive-open"><Upload size={15} />{t('openArchive')}
-              <input type="file" accept="application/json,.json" hidden onChange={(event) => {
+            {archive.people.length > 0 && <label className={`archive-open ${busyAction === 'importing' ? 'is-busy' : ''}`}>
+              {busyAction === 'importing' ? <LoaderCircle className="button-spinner" size={15} /> : <Upload size={15} />}
+              {busyAction === 'importing' ? t('importingArchive') : t('openArchive')}
+              <input type="file" accept="application/json,.json" hidden disabled={busyAction !== null} onChange={(event) => {
                 void selectArchiveFile(event.currentTarget.files?.[0], event.currentTarget)
               }} />
             </label>}
@@ -715,21 +742,28 @@ function App() {
 
       {admin && <section className="admin-dock">
         <div className="dock-title"><ShieldCheck size={18} /><span><strong>{t('adminMode')}</strong><small>{t('adminHint')}</small></span></div>
-        <div className="dock-actions"><button className="button button-primary" onClick={() => beginKeyFlow('save')}><Download size={16} />{t('save')}</button>
-          <button className="button button-light" onClick={() => { void exportPlainArchive() }}><Download size={16} />{t('exportPlain')}</button>
-          <label className="button button-light"><Upload size={16} />{t('importPlain')}
-            <input type="file" accept="application/json,.json" hidden onChange={(event) => {
+        <div className="dock-actions"><button className="button button-primary" disabled={busyAction !== null} onClick={() => beginKeyFlow('save')}><Download size={16} />{t('save')}</button>
+          <button className="button button-light" disabled={busyAction !== null} onClick={() => { void exportPlainArchive() }}>
+            {busyAction === 'exporting' ? <LoaderCircle className="button-spinner" size={15} /> : <Download size={16} />}
+            {busyAction === 'exporting' ? t('exportingArchive') : t('exportPlain')}
+          </button>
+          <label className={`button button-light ${busyAction === 'importing' ? 'is-busy' : ''}`}>
+            {busyAction === 'importing' ? <LoaderCircle className="button-spinner" size={15} /> : <Upload size={16} />}
+            {busyAction === 'importing' ? t('importingArchive') : t('importPlain')}
+            <input type="file" accept="application/json,.json" hidden disabled={busyAction !== null} onChange={(event) => {
               void selectPlainArchive(event.currentTarget.files?.[0], event.currentTarget)
             }} />
           </label>
-          <button className="button button-light" onClick={() => setModal('publish')}><Upload size={16} />{t('publish')}</button></div>
+          <button className="button button-light" disabled={busyAction !== null} onClick={() => setModal('publish')}><Upload size={16} />{t('publish')}</button></div>
       </section>}
 
       {notice && <div className="notice" role="status"><Check size={17} />{notice}<button onClick={() => setNotice('')} aria-label={t('close')}><X size={16} /></button></div>}
 
-      {modal && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) cancelModal() }}>
+      {modal && <div className="modal-backdrop" onMouseDown={(event) => {
+        if (event.target === event.currentTarget && busyAction === null) cancelModal()
+      }}>
         <section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-          <button className="modal-close icon-button" aria-label={t('close')} onClick={cancelModal}><X size={18} /></button>
+          <button className="modal-close icon-button" aria-label={t('close')} disabled={busyAction !== null} onClick={cancelModal}><X size={18} /></button>
           {modal === 'admin' && <><div className="modal-symbol"><LockKeyhole size={23} /></div><h2 id="modal-title">{t('admin')}</h2><p>{t('adminHint')}</p>
             <form onSubmit={authenticateAdmin} className="form-stack"><label>{t('password')}<input autoFocus name="password" type="password" required /></label>
               <div className="inline-warning"><ShieldCheck size={16} /> {t('publicPasswordWarning')}</div>
@@ -745,8 +779,11 @@ function App() {
             <p>{keyPurpose === 'save' ? t('passphraseGuidance') : t('savedDataWarning')}</p>
             {keyPurpose === 'save' && passphrase && !replaceKey ? <div className="key-choice">
               <div className="inline-warning"><ShieldCheck size={16} /> {t('activeKeyInfo')}</div>
-              <div className="modal-actions"><button type="button" className="button button-light" onClick={() => { setReplaceKey(true) }}>{t('newKey')}</button>
-                <button type="button" className="button button-primary" onClick={() => void saveArchive(passphrase)}>{t('reuseKey')}</button></div>
+              <div className="modal-actions"><button type="button" className="button button-light" disabled={busyAction !== null} onClick={() => { setReplaceKey(true) }}>{t('newKey')}</button>
+                <button type="button" className="button button-primary" disabled={busyAction !== null} onClick={() => void saveArchive(passphrase)}>
+                  {busyAction === 'saving' && <LoaderCircle className="button-spinner" size={15} />}
+                  {busyAction === 'saving' ? t('savingArchive') : t('reuseKey')}
+                </button></div>
             </div> : <form className="form-stack" onSubmit={async (event) => {
               event.preventDefault()
               const data = new FormData(event.currentTarget)
@@ -756,19 +793,25 @@ function App() {
                 return
               }
               if (keyPurpose === 'open' && pendingEnvelope) {
+                setBusyAction('opening')
                 try {
                   const result = await decryptArchive(pendingEnvelope as EncryptedArchive, key)
-                            if (archive.people.length > 0) {
-                              setPendingArchive(result)
-                              setPendingPassphrase(key)
-                              setPendingEnvelope(null)
-                              setModal('import-review')
-                            } else installArchive(result, key)
+                  if (archive.people.length > 0) {
+                    setPendingArchive(result)
+                    setPendingPassphrase(key)
+                    setPendingEnvelope(null)
+                    setModal('import-review')
+                  } else installArchive(result, key)
                 } catch (error) { setNotice(error instanceof Error ? error.message : t('archiveOpenFailure')) }
+                finally { setBusyAction(null) }
               } else await saveArchive(key)
             }}><label>{t('passphrase')}<input autoFocus name="passphrase" type="password" minLength={keyPurpose === 'save' ? 12 : 1} required /></label>
               {keyPurpose === 'save' && <label>{t('passphraseConfirmation')}<input name="passphraseConfirmation" type="password" minLength={12} required /></label>}
-              <div className="modal-actions"><button type="button" className="button button-light" onClick={() => setModal(null)}>{t('cancel')}</button><button className="button button-primary">{t('confirm')}</button></div>
+              <div className="modal-actions"><button type="button" className="button button-light" disabled={busyAction !== null} onClick={() => setModal(null)}>{t('cancel')}</button>
+                <button className="button button-primary" disabled={busyAction !== null}>
+                  {busyAction && <LoaderCircle className="button-spinner" size={15} />}
+                  {busyAction === 'opening' ? t('openingArchive') : busyAction === 'saving' ? t('savingArchive') : t('confirm')}
+                </button></div>
             </form>}</>}
           {modal === 'person' && <><div className="modal-symbol"><UserRoundPlus size={23} /></div><h2 id="modal-title">{editing ? t('editPerson') : t('addPerson')}</h2>
             <form className="form-stack person-form" onSubmit={editing ? onEditPerson : onAddPerson}>
@@ -778,9 +821,13 @@ function App() {
               <label>{t('biography')}<textarea name="biography" rows={2} defaultValue={editing?.biography} /></label>
               <div className="two-fields"><label>{t('emailAddress')}<input name="email" type="email" defaultValue={editing?.email} /></label><label>WhatsApp<input name="whatsapp" type="tel" defaultValue={editing?.whatsapp} /></label></div>
               <label>{t('notes')}<textarea name="notes" rows={2} defaultValue={editing?.notes} /></label>
-              <label>{t('choosePhoto')}<input name="photo" type="file" accept={photoTypes.join(',')} onChange={(event) => choosePhoto(event.currentTarget.files?.[0], event.currentTarget)} />
+              <div className="photo-field">
+                <label className="field-label" htmlFor="person-photo">{t('choosePhoto')}</label>
+                <input id="person-photo" name="photo" type="file" accept={photoTypes.join(',')} onChange={(event) => choosePhoto(event.currentTarget.files?.[0], event.currentTarget)} />
                 {croppedPhoto && <span className="crop-ready">{t('cropReady')}</span>}
-                {editing?.photo && <><small>{t('photoReplacement')}</small><span className="check-row"><input name="removePhoto" type="checkbox" /> {t('removePhoto')}</span></>}</label>
+                {editing?.photo && <><small>{t('photoReplacement')}</small>
+                  <label className="photo-remove-option"><input name="removePhoto" type="checkbox" /><span>{t('removePhoto')}</span></label>
+                </>}</div>
               <div className="modal-actions"><button type="button" className="button button-light" onClick={() => { setModal(null); setEditing(null) }}>{t('cancel')}</button><button className="button button-primary">{editing ? t('confirm') : t('create')}</button></div>
             </form></>}
           {modal === 'relationship' && selected && <><div className="modal-symbol"><Users size={23} /></div><h2 id="modal-title">{t('relationship')}</h2>
@@ -798,7 +845,11 @@ function App() {
               <div className="two-fields"><label>{t('githubBranch')}<input name="branch" required defaultValue="main" /></label><label>{t('githubPath')}<input name="path" required defaultValue={archivePath} readOnly /></label></div>
               <label>{t('githubToken')}<input name="token" type="password" autoComplete="off" required /></label>
               <p className="form-note">{t('tokenScopeHint')}</p>
-              <div className="modal-actions"><button type="button" className="button button-light" onClick={() => setModal(null)}>{t('cancel')}</button><button className="button button-primary"><Upload size={16} />{t('publish')}</button></div>
+              <div className="modal-actions"><button type="button" className="button button-light" disabled={busyAction !== null} onClick={() => setModal(null)}>{t('cancel')}</button>
+                <button className="button button-primary" disabled={busyAction !== null}>
+                  {busyAction === 'publishing' ? <LoaderCircle className="button-spinner" size={15} /> : <Upload size={16} />}
+                  {busyAction === 'publishing' ? t('publishing') : t('publish')}
+                </button></div>
             </form></>}
         </section>
       </div>}

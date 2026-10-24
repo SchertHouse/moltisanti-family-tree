@@ -15,13 +15,23 @@ describe('square image crop dialog', () => {
   it('previews a local image and applies a square crop as a stripped JPEG', async () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:local-photo')
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    vi.stubGlobal('PointerEvent', class extends MouseEvent {
+      pointerId: number
+      constructor(type: string, init: PointerEventInit = {}) {
+        super(type, init)
+        this.pointerId = init.pointerId ?? 1
+      }
+    })
     vi.stubGlobal('ResizeObserver', class {
       observe() {}
       disconnect() {}
       unobserve() {}
     })
     const bitmap = { width: 400, height: 200, close: vi.fn() }
-    vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue(bitmap))
+    let resolveBitmap: (value: typeof bitmap) => void = () => {}
+    vi.stubGlobal('createImageBitmap', vi.fn(() => new Promise<typeof bitmap>((resolve) => {
+      resolveBitmap = resolve
+    })))
     vi.spyOn(HTMLImageElement.prototype, 'getBoundingClientRect').mockReturnValue({
       x: 0, y: 0, left: 0, top: 0, right: 200, bottom: 100, width: 200, height: 100,
       toJSON: () => ({}),
@@ -49,12 +59,23 @@ describe('square image crop dialog', () => {
     />)
 
     fireEvent.load(screen.getByRole('img', { name: 'Photo crop preview' }))
-    expect(screen.getByRole('group', { name: 'Square crop selection' })).toBeInTheDocument()
+    const cropSelection = screen.getByRole('group', { name: 'Square crop selection' })
+    expect(cropSelection.closest('.crop-backdrop')?.parentElement).toBe(document.body)
+    expect(screen.getByRole('dialog', { name: 'Crop photo' })).toBeInTheDocument()
     expect(screen.getByText('Final image: about 160 × 160 pixels')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Apply crop' }))
+    fireEvent.pointerDown(cropSelection, { pointerId: 1, clientX: 100, clientY: 100 })
+    fireEvent.pointerMove(cropSelection, { pointerId: 1, clientX: 120, clientY: 110 })
+    expect(cropSelection).toHaveStyle({ left: '80px', top: '20px' })
+    fireEvent.pointerUp(cropSelection, { pointerId: 1 })
+    const applyCrop = screen.getByRole('button', { name: 'Apply crop' })
+    fireEvent.click(applyCrop)
+    const processingButton = screen.getByRole('button', { name: 'Processing crop…' })
+    expect(processingButton).toBeDisabled()
+    expect(processingButton.querySelector('.button-spinner')).toBeInTheDocument()
+    resolveBitmap(bitmap)
 
     expect(createImageBitmap).toHaveBeenCalledWith(expect.any(File), { imageOrientation: 'from-image' })
-    await waitFor(() => expect(context.drawImage).toHaveBeenCalledWith(bitmap, 120, 20, 160, 160, 0, 0, 160, 160))
+    await waitFor(() => expect(context.drawImage).toHaveBeenCalledWith(bitmap, 160, 40, 160, 160, 0, 0, 160, 160))
     await waitFor(() => expect(onComplete).toHaveBeenCalledWith('data:image/jpeg;base64,cropped'))
     expect(bitmap.close).toHaveBeenCalled()
     expect(HTMLCanvasElement.prototype.toDataURL).toHaveBeenCalledWith('image/jpeg', 0.9)

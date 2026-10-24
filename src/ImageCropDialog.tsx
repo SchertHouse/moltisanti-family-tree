@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
-import { Check, Crop, X } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { Check, Crop, LoaderCircle, X } from 'lucide-react'
 import { clampSquareCrop, cropToPixels, normalizedSquareSize, type SquareCrop } from './imageCrop'
 import type { TranslationKey } from './i18n'
 import imageConfig from '../image-config.json'
@@ -25,6 +26,7 @@ export default function ImageCropDialog({ file, t, onCancel, onComplete }: Props
   const [dimensions, setDimensions] = useState<ImageSize | null>(null)
   const [crop, setCrop] = useState<SquareCrop | null>(null)
   const [error, setError] = useState('')
+  const [processing, setProcessing] = useState(false)
   const imageRef = useRef<HTMLImageElement>(null)
   const drag = useRef<{ pointerId: number; x: number; y: number; cropX: number; cropY: number } | null>(null)
 
@@ -67,7 +69,7 @@ export default function ImageCropDialog({ file, t, onCancel, onComplete }: Props
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (!crop) return
     event.preventDefault()
-    event.currentTarget.setPointerCapture(event.pointerId)
+    event.currentTarget.setPointerCapture?.(event.pointerId)
     drag.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, cropX: crop.x, cropY: crop.y }
   }
 
@@ -101,6 +103,7 @@ export default function ImageCropDialog({ file, t, onCancel, onComplete }: Props
       setError(t('cropImageNotReady'))
       return
     }
+    setProcessing(true)
     try {
       const bitmap = typeof createImageBitmap === 'function'
         ? await createImageBitmap(file, { imageOrientation: 'from-image' })
@@ -127,6 +130,8 @@ export default function ImageCropDialog({ file, t, onCancel, onComplete }: Props
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t('cropFailure'))
+    } finally {
+      setProcessing(false)
     }
   }
 
@@ -134,7 +139,7 @@ export default function ImageCropDialog({ file, t, onCancel, onComplete }: Props
     ? Math.round(crop.size * dimensions.naturalWidth / dimensions.width)
     : 0
 
-  return <div className="modal-backdrop crop-backdrop" onMouseDown={(event) => {
+  return createPortal(<div className="modal-backdrop crop-backdrop" onMouseDown={(event) => {
     if (event.target === event.currentTarget) onCancel()
   }}>
     <section className="modal-card crop-dialog" role="dialog" aria-modal="true" aria-labelledby="crop-title">
@@ -144,6 +149,9 @@ export default function ImageCropDialog({ file, t, onCancel, onComplete }: Props
       <p>{t('cropInstructions')}</p>
       <div className="crop-stage">
         {source && <img ref={imageRef} src={source} alt={t('cropPreview')} onLoad={measureImage} onError={() => setError(t('cropLoadFailure'))} />}
+        {source && !dimensions && !error && <div className="crop-image-loading" role="status">
+          <LoaderCircle className="button-spinner" size={18} />{t('loadingPhoto')}
+        </div>}
         {crop && dimensions && <div className="crop-image-overlay" style={{
           width: dimensions.width,
           height: dimensions.height,
@@ -173,9 +181,12 @@ export default function ImageCropDialog({ file, t, onCancel, onComplete }: Props
       {crop && <p className="crop-pixel-size">{t('cropOutputSize', { size: cropPixels })}</p>}
       {error && <p className="crop-error" role="alert">{error}</p>}
       <div className="modal-actions">
-        <button type="button" className="button button-light" onClick={onCancel}>{t('cancel')}</button>
-        <button type="button" className="button button-primary" disabled={!crop || !dimensions} onClick={completeCrop}><Check size={16} />{t('applyCrop')}</button>
+        <button type="button" className="button button-light" disabled={processing} onClick={onCancel}>{t('cancel')}</button>
+        <button type="button" className="button button-primary" disabled={!crop || !dimensions || processing} onClick={completeCrop}>
+          {processing ? <LoaderCircle className="button-spinner" size={15} /> : <Check size={16} />}
+          {processing ? t('processingCrop') : t('applyCrop')}
+        </button>
       </div>
     </section>
-  </div>
+  </div>, document.body)
 }
