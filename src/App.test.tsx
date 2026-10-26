@@ -161,6 +161,9 @@ describe('family tree interface', () => {
     fireEvent.change(screen.getByLabelText('Last name'), { target: { value: 'Family' } })
     fireEvent.change(screen.getByLabelText('Alternate name'), { target: { value: 'Alexandra Alias' } })
     fireEvent.change(screen.getByLabelText('Sex at birth'), { target: { value: 'F' } })
+    const birthDate = screen.getByLabelText('Birth date (YYYY-MM-DD)') as HTMLInputElement
+    fireEvent.change(birthDate, { target: { value: '19901024' } })
+    expect(birthDate.value).toBe('1990-10-24')
     fireEvent.change(screen.getByLabelText('Occupation'), { target: { value: 'Researcher' } })
     fireEvent.change(screen.getByLabelText('Residence'), { target: { value: 'Rome' } })
     fireEvent.change(screen.getByLabelText('Nationality'), { target: { value: 'Italian' } })
@@ -171,6 +174,37 @@ describe('family tree interface', () => {
     expect(screen.getByText('Researcher')).toBeInTheDocument()
     expect(screen.getByText('Rome')).toBeInTheDocument()
     expect(screen.getByText('Italian')).toBeInTheDocument()
+  })
+
+  it('shows the recorded kinship path to a person selected from the detail search', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 404 })))
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Admin' }))
+    fireEvent.change(screen.getByLabelText('Local Admin password'), { target: { value: 'moltisantitree' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    for (const firstName of ['Parent', 'Child']) {
+      fireEvent.click(screen.getByRole('button', { name: 'Add person' }))
+      fireEvent.change(screen.getByLabelText('First name'), { target: { value: firstName } })
+      fireEvent.change(screen.getByLabelText('Last name'), { target: { value: 'Family' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    }
+
+    fireEvent.click(screen.getByRole('button', { name: 'Parent Family' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add a connection' }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Person' }), { target: { value: 'Child' } })
+    fireEvent.click(screen.getByRole('option', { name: 'Child Family' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    const comparePicker = screen.getByRole('combobox', { name: 'Compare with' })
+    fireEvent.change(comparePicker, { target: { value: 'Child' } })
+    fireEvent.click(screen.getByRole('option', { name: 'Child Family' }))
+
+    expect(screen.getByText('Recorded relationship path')).toBeInTheDocument()
+    expect(screen.getByText('Child', { selector: 'span' })).toBeInTheDocument()
+    expect(screen.getByText('Parent-child links: 1')).toBeInTheDocument()
   })
 
   it('fades a notification after ten seconds and then removes it', async () => {

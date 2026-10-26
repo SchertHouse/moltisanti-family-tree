@@ -27,6 +27,8 @@ Stato verificato per l'implementazione corrente; non sostituisce l'esecuzione de
 - [x] Conservare pan e zoom correnti quando si deseleziona una persona toccando lo sfondo dell'albero.
 - [x] Navigazione spaziale tra i nodi con le frecce e indicatore di focus da tastiera distinto dalla selezione tramite puntatore.
 - [x] Ricaricare le immagini visibili nell'albero dopo aver svuotato la cache delle varianti.
+- [x] Inserire automaticamente i separatori nelle date digitando soltanto le cifre, mantenendo il supporto alle date parziali di solo anno.
+- [x] Calcolo del percorso di parentela registrato dalla scheda persona verso un'altra persona ricercabile.
 
 ## Da completare
 

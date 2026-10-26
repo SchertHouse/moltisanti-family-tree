@@ -2,6 +2,29 @@ import type { Language } from './i18n'
 
 const ISO_DATE = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/
 
+export function formatDateDraft(value: string, language: Language): string {
+  const digits = value.replace(/\D/g, '')
+  const groups = language === 'it' ? [2, 2, 4] : [4, 2, 2]
+  let formatted = ''
+  let offset = 0
+
+  groups.forEach((size, index) => {
+    if (offset >= digits.length) return
+    const group = digits.slice(offset, offset + size)
+    formatted += group
+    offset += group.length
+    if (offset < digits.length || (group.length === size && index < groups.length - 1)) formatted += '-'
+  })
+
+  return formatted + digits.slice(offset)
+}
+
+export function finalizeDateDraft(value: string, language: Language): string {
+  const digits = value.replace(/\D/g, '')
+  if (digits.length === 4) return digits
+  return formatDateDraft(value, language).replace(/-$/, '')
+}
+
 export function formatDateInput(value: string | undefined, language: Language): string {
   if (!value || language !== 'it') return value ?? ''
   const match = ISO_DATE.exec(value)

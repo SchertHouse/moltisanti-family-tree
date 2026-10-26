@@ -8,6 +8,8 @@ La configurazione versionata in `image-config.json` è la fonte autorevole dei l
 
 Relazioni tipizzate `parent-child` e `partner` sono indipendenti; il partner non diventa automaticamente genitore. Il layout può allineare partner alla stessa generazione solo quando la contrazione dei legami partner non crea un ciclo né colloca un rapporto genitore-figlio nello stesso gruppo; in caso di conflitto prevalgono i livelli imposti dalla discendenza. Le persone non vengono eliminate né le relazioni modificate per ottenere l'allineamento.
 
+La scheda persona può confrontare due persone calcolando il percorso più breve sulle relazioni registrate. Il risultato esplicita ogni passaggio genitore, figlio o partner e conta separatamente i legami genitore-figlio; non modifica l'archivio e non deduce legami assenti.
+
 Il posizionamento raggruppa i partner compatibili, mantiene adiacenti i membri della coppia e ordina i gruppi di ogni livello con passaggi barycentrici basati sui genitori e sui figli. Le persone con lo stesso insieme di genitori formano un nucleo per il disegno: i relativi archi condividono connettori ortogonali, senza introdurre entità o relazioni aggiuntive nel JSON. L'ordinamento usa gli ID come spareggio stabile, così lo stesso archivio produce lo stesso layout.
 
 Il file persistito è un envelope JSON pubblico contenente versione formato, algoritmo AES-256-GCM, PBKDF2-SHA-256, iterazioni, salt, IV e ciphertext Base64. Chiave/passphrase mai incluse. Il tag GCM è incorporato nel ciphertext. Le immagini sono ulteriormente cifrate individualmente prima di essere inserite nel JSON. Cambi di schema richiedono migrazione esplicita.

@@ -152,6 +152,15 @@ h1 { font: 800 30px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; letter-spacin
 .bio-block p { margin: 0; color: #7e8479; font-size: 10px; line-height: 1.7; white-space: pre-wrap; }
 .family-block { padding: 15px 19px 4px; border-bottom: 1px solid #eeeee8; }
 .family-block > h3 { color: #596755; font-size: 11px; margin-bottom: 13px; }
+.kinship-calculator { margin: 0 0 14px; padding: 10px; border: 1px solid #e7ebe3; border-radius: 10px; background: #f8faf6; }
+.kinship-calculator h4 { margin: 0 0 8px; color: #596755; font-size: 10px; }
+.kinship-result { margin-top: 9px; color: #6e766a; font-size: 9px; line-height: 1.5; }
+.kinship-result > strong { color: #596755; }
+.kinship-result ol { display: grid; gap: 4px; margin: 6px 0; padding-left: 18px; }
+.kinship-result li { padding-left: 2px; }
+.kinship-result li span { margin-right: 5px; color: #8b9186; }
+.kinship-result li strong { color: #485448; font-weight: 600; }
+.kinship-result p { margin: 5px 0 0; }
 .family-list { margin: 0 0 12px; }
 .family-list h3 { color: #95998f; font-size: 9px; font-weight: 600; margin: 0 0 6px; }
 .family-person-row { display: flex; align-items: center; gap: 4px; }

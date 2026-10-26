@@ -7,13 +7,14 @@ Consultazione e gestione responsive di un albero genealogico privato, pubblicabi
 ## Funzioni
 
 - Albero interattivo, schede persona, ricerca e filtri per generazione.
+- Nella scheda di dettaglio, consentire la ricerca di una seconda persona e mostrare il percorso minimo dei legami registrati tra le due, separando legami genitore-figlio e partner; non inferire relazioni non presenti nell'archivio.
 - Navigazione da tastiera dell'albero con le frecce verso il nodo spazialmente adiacente; il focus visibile non deve apparire come un contorno aggiuntivo dopo una selezione tramite mouse o touch.
 - Su schermi touch in landscape, mantenere scorrevole la pagina quando la scheda persona è a fianco dell'albero; un tocco sullo sfondo dell'albero deseleziona la persona corrente senza interferire con pan/zoom né modificare la posizione corrente dell'albero.
 - Relazioni genitore-figlio e partner indipendenti.
 - Nel layout, allineare i partner quando compatibile con le generazioni, raggruppare i figli per genitori comuni e ridurre gli incroci con connettori familiari condivisi; preservare i dati originali nei casi incompatibili.
 - Modifica Admin separata dalla consultazione Viewer.
 - Scheda persona con nome alternativo, sesso alla nascita, professione, residenza e nazionalità opzionali.
-- Nell'interfaccia italiana, inserire e mostrare le date complete nel formato `DD-MM-YYYY`; mantenere le date ISO nell'archivio e usare formati localizzati per le altre lingue. L'etichetta della data di morte resta compatta e non indica tra parentesi che il campo è facoltativo.
+- Nell'interfaccia italiana, inserire e mostrare le date complete nel formato `DD-MM-YYYY`; inserendo solo cifre, aggiungere automaticamente i separatori. Mantenere le date ISO nell'archivio e usare formati localizzati per le altre lingue. L'etichetta della data di morte resta compatta e non indica tra parentesi che il campo è facoltativo.
 - Prima di associare una fotografia a una persona, mostrare un editor di ritaglio quadrato utilizzabile con mouse e touch, con anteprima, spostamento e ridimensionamento della selezione. Correggere l'orientamento EXIF se supportato dal browser, normalizzare nel browser e non conservare i metadati originali. Validare tipo e dimensione in ingresso in base alla configurazione.
 - Normalizzare le immagini in JPEG nel browser, senza ingrandirle, con un massimo iniziale di **1200 × 1200 pixel**. `image-config.json` è la fonte versionata e autorevole per limiti, qualità, varianti e cache, ed è modificabile senza cambiare il codice applicativo.
 - Salvare una sola immagine normalizzata cifrata per persona nell'archivio cifrato; non pubblicare originali, immagini in chiaro o varianti. La cifratura avviene nel browser con la passphrase e la relazione immagine-persona usa l'ID stabile.

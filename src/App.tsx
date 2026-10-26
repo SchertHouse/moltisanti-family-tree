@@ -15,8 +15,11 @@ import { clearImageCache } from './imageVariants'
 import { ProfilePhoto, TreePhoto } from './PhotoVariant'
 import { clearRememberedPassphrase, getRememberedPassphrase, saveRememberedPassphrase } from './rememberedKey'
 import { browserLanguage, translate, type Language } from './i18n'
-import { dateInputPattern, formatCalendarDate, formatDate, formatDateInput, parseDateInput } from './dateInput'
+import {
+  dateInputPattern, finalizeDateDraft, formatCalendarDate, formatDate, formatDateDraft, formatDateInput, parseDateInput,
+} from './dateInput'
 import { createGedzip } from './gedzip'
+import { findKinshipPath } from './kinship'
 import {
   birthdayInfo, emptyArchive, generationMap, isSexAtBirth, relationTo, treePositions, validateArchive,
   uniquePeople, type FamilyArchive, type Person, type Relationship, type RelationshipType,
@@ -36,6 +39,7 @@ function App() {
   const t = (key: Parameters<typeof translate>[1], values?: Record<string, string | number>) => translate(language, key, values)
   const [archive, setArchive] = useState<FamilyArchive>(emptyArchive)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [kinshipPersonId, setKinshipPersonId] = useState('')
   const [admin, setAdmin] = useState(false)
   const [passphrase, setPassphrase] = useState('')
   const [rememberPassphrase, setRememberPassphrase] = useState(false)
@@ -78,6 +82,7 @@ function App() {
   const pinch = useRef<{ distance: number; scale: number; worldX: number; worldY: number } | null>(null)
   const previousSelectedId = useRef(selectedId)
   const suppressClick = useRef(false)
+  const manualDateFields = useRef(new WeakSet<HTMLInputElement>())
 
   useEffect(() => {
     const markKeyboardNavigation = () => { keyboardNavigationMode.current = true }
@@ -116,6 +121,10 @@ function App() {
   }, [language])
 
   const selected = archive.people.find((person) => person.id === selectedId) ?? null
+  const kinshipPerson = archive.people.find((person) => person.id === kinshipPersonId && person.id !== selectedId)
+  const kinshipPath = selected && kinshipPerson
+    ? findKinshipPath(archive, selected.id, kinshipPerson.id)
+    : null
   const upcomingBirthday = selected?.birthDate && !selected.deathDate ? birthdayInfo(selected.birthDate) : null
   const generations = useMemo(() => generationMap(archive), [archive])
   const positions = useMemo(() => treePositions(archive), [archive])
@@ -497,6 +506,42 @@ function App() {
     setPendingArchive(null)
     setPendingPassphrase('')
     setCroppedPhoto(null)
+  }
+
+  const formatDateField = (input: HTMLInputElement, finalize = false) => {
+    const cursor = input.selectionStart ?? input.value.length
+    const digitsBeforeCursor = input.value.slice(0, cursor).replace(/\D/g, '').length
+    const manuallySeparated = manualDateFields.current.has(input)
+    const formatted = manuallySeparated
+      ? finalize
+        ? input.value.replace(/-{2,}/g, '-').replace(/-$/, '')
+        : input.value.replace(/-{2,}/g, '-')
+      : finalize ? finalizeDateDraft(input.value, language) : formatDateDraft(input.value, language)
+    if (formatted === input.value) return
+    input.value = formatted
+    let nextCursor = 0
+    let digitsSeen = 0
+    while (nextCursor < formatted.length && digitsSeen < digitsBeforeCursor) {
+      if (/\d/.test(formatted[nextCursor]!)) digitsSeen += 1
+      nextCursor += 1
+    }
+    if (digitsSeen === digitsBeforeCursor && formatted[nextCursor - 1] !== '-') {
+      while (formatted[nextCursor] === '-') nextCursor += 1
+    }
+    input.setSelectionRange(nextCursor, nextCursor)
+  }
+  const handleDateKeyDown = (input: HTMLInputElement, key: string) => {
+    if (key === '-') manualDateFields.current.add(input)
+    else if (input.selectionStart === 0 && input.selectionEnd === input.value.length) {
+      manualDateFields.current.delete(input)
+    }
+  }
+  const handleDatePaste = (input: HTMLInputElement, text: string) => {
+    if (text.includes('-')) manualDateFields.current.add(input)
+  }
+  const finishDateField = (input: HTMLInputElement) => {
+    formatDateField(input, true)
+    manualDateFields.current.delete(input)
   }
 
   const onAddPerson = (event: FormEvent<HTMLFormElement>) => {
@@ -1048,6 +1093,37 @@ function App() {
               </div>
             </div>
             <section className="family-block"><h3><Users size={15} />{t('family')}</h3>
+              {archive.people.length > 1 && <section className="kinship-calculator">
+                <h4>{t('kinshipCalculator')}</h4>
+                <PersonSearchPicker
+                  people={archive.people.filter((person) => person.id !== selected.id)}
+                  value={kinshipPerson?.id ?? ''}
+                  onChange={setKinshipPersonId}
+                  label={t('kinshipCompare')}
+                  placeholder={t('searchPerson')}
+                  noResults={t('noPeopleFound')}
+                />
+                {kinshipPerson && (kinshipPath
+                  ? <div className="kinship-result" aria-live="polite">
+                    <strong>{t('kinshipPath')}</strong>
+                    {kinshipPath.steps.length === 0
+                      ? <p>{t('kinshipSamePerson')}</p>
+                      : <ol>{kinshipPath.steps.map((step, index) => {
+                        const person = archive.people.find((entry) => entry.id === step.personId)
+                        if (!person) return null
+                        const relationLabel = step.type === 'parent'
+                          ? t('kinshipParent')
+                          : step.type === 'child' ? t('kinshipChild') : t('kinshipPartner')
+                        return <li key={`${step.personId}-${index}`}>
+                          <span>{relationLabel}</span>
+                          <strong>{person.firstName} {person.lastName}</strong>
+                        </li>
+                      })}</ol>}
+                    {kinshipPath.bloodSteps > 0 && <p>{t('kinshipBloodSteps', { count: kinshipPath.bloodSteps })}</p>}
+                    {kinshipPath.partnerSteps > 0 && <p>{t('kinshipPartnerSteps', { count: kinshipPath.partnerSteps })}</p>}
+                  </div>
+                  : <p className="kinship-result muted-copy" aria-live="polite">{t('kinshipNoConnection')}</p>)}
+              </section>}
               {familyList(t('parents'), relationshipEntries(selected.id, 'parent-child', 'in'))}
               {familyList(t('children'), relationshipEntries(selected.id, 'parent-child', 'out'))}
               {familyList(t('partners'), relationshipEntries(selected.id, 'partner'))}
@@ -1203,7 +1279,11 @@ function App() {
                 <option value="X">{t('sexX')}</option>
                 <option value="U">{t('sexU')}</option>
               </select></label>
-              <div className="two-fields"><label>{t('birthDate')}<input name="birthDate" inputMode="numeric" pattern={dateInputPattern(language)} placeholder={language === 'it' ? 'DD-MM-YYYY' : 'YYYY-MM-DD'} defaultValue={formatDateInput(editing?.birthDate, language)} /></label><label>{t('deathDate')}<input name="deathDate" inputMode="numeric" pattern={dateInputPattern(language)} placeholder={language === 'it' ? 'DD-MM-YYYY' : 'YYYY-MM-DD'} defaultValue={formatDateInput(editing?.deathDate, language)} /></label></div>
+              <div className="two-fields"><label>{t('birthDate')}<input name="birthDate" inputMode="numeric" pattern={dateInputPattern(language)} placeholder={language === 'it' ? 'DD-MM-YYYY' : 'YYYY-MM-DD'} defaultValue={formatDateInput(editing?.birthDate, language)} onFocus={(event) => {
+                if (event.currentTarget.value.includes('-')) manualDateFields.current.add(event.currentTarget)
+              }} onKeyDown={(event) => handleDateKeyDown(event.currentTarget, event.key)} onPaste={(event) => handleDatePaste(event.currentTarget, event.clipboardData.getData('text'))} onChange={(event) => formatDateField(event.currentTarget)} onBlur={(event) => finishDateField(event.currentTarget)} /></label><label>{t('deathDate')}<input name="deathDate" inputMode="numeric" pattern={dateInputPattern(language)} placeholder={language === 'it' ? 'DD-MM-YYYY' : 'YYYY-MM-DD'} defaultValue={formatDateInput(editing?.deathDate, language)} onFocus={(event) => {
+                if (event.currentTarget.value.includes('-')) manualDateFields.current.add(event.currentTarget)
+              }} onKeyDown={(event) => handleDateKeyDown(event.currentTarget, event.key)} onPaste={(event) => handleDatePaste(event.currentTarget, event.clipboardData.getData('text'))} onChange={(event) => formatDateField(event.currentTarget)} onBlur={(event) => finishDateField(event.currentTarget)} /></label></div>
               <label>{t('birthPlace')}<input name="birthPlace" defaultValue={editing?.birthPlace} /></label>
               <label>{t('profession')}<input name="profession" defaultValue={editing?.profession} /></label>
               <label>{t('residence')}<input name="residence" defaultValue={editing?.residence} /></label>
