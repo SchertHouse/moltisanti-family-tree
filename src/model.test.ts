@@ -40,6 +40,29 @@ describe('family archive validation', () => {
       relationships: [],
     })).toThrow(/immagini raster/)
   })
+
+  it('accepts optional person fields and validates the sex-at-birth value', () => {
+    expect(() => validateArchive({
+      schemaVersion: 1,
+      people: [{
+        id: 'a',
+        firstName: 'Alex',
+        lastName: 'Family',
+        alternateName: 'Alexandra',
+        sexAtBirth: 'X',
+        profession: 'Researcher',
+        residence: 'Rome',
+        nationality: 'Italian',
+      }],
+      relationships: [],
+    })).not.toThrow()
+
+    expect(() => validateArchive({
+      schemaVersion: 1,
+      people: [{ id: 'a', firstName: 'Alex', lastName: 'Family', sexAtBirth: 'invalid' }],
+      relationships: [],
+    })).toThrow(/sesso alla nascita/)
+  })
 })
 
 describe('birthday dates', () => {

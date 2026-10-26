@@ -5,7 +5,7 @@ Stato verificato per l'implementazione corrente; non sostituisce l'esecuzione de
 ## Implementato
 
 - [x] Scaffold SPA React/Vite con TypeScript strict e CI GitHub Pages.
-- [x] Modello versione 1, validazione, archivio AES-256-GCM/PBKDF2, import con riepilogo e export JSON cifrato/in chiaro con conferma.
+- [x] Modello versione 1, validazione, archivio AES-256-GCM/PBKDF2, import con riepilogo ed export JSON cifrato/in chiaro e GEDZIP 7.0 con foto/gallerie in chiaro, passphrase ove necessaria e conferma.
 - [x] Caricamento automatico dell'archivio cifrato pubblicato nel percorso previsto e controllo degli asset in build.
 - [x] Ricordo facoltativo della passphrase cifrata in IndexedDB con chiave non esportabile, apertura automatica, fallback manuale e rimozione.
 - [x] Pubblicazione GitHub Contents dell'archivio cifrato singolo con SHA per aggiornamento e segnalazione conflitti; riuso della chiave attiva o cifratura con nuova passphrase.
@@ -21,6 +21,8 @@ Stato verificato per l'implementazione corrente; non sostituisce l'esecuzione de
 - [x] Deduplicazione dell'elenco fratelli/sorelle quando condividono più di un genitore.
 - [x] Ricerca dei fratelli/sorelle deduplicata per ID persona, mantenendo l'ordine di prima apparizione.
 - [x] Rimozione amministrativa dei singoli legami familiari con conferma, senza eliminare le persone coinvolte.
+- [x] Campi opzionali persona per nome alternativo, sesso alla nascita, professione, residenza e nazionalità, inclusa esportazione GEDCOM/GEDZIP.
+- [x] Deselezione tramite tocco/click sullo sfondo dell'albero e scroll pagina utilizzabile in landscape con dettagli laterali.
 
 ## Da completare
 

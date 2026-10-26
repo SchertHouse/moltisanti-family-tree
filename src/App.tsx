@@ -16,8 +16,9 @@ import { ProfilePhoto, TreePhoto } from './PhotoVariant'
 import { clearRememberedPassphrase, getRememberedPassphrase, saveRememberedPassphrase } from './rememberedKey'
 import { browserLanguage, translate, type Language } from './i18n'
 import { dateInputPattern, formatCalendarDate, formatDate, formatDateInput, parseDateInput } from './dateInput'
+import { createGedzip } from './gedzip'
 import {
-  birthdayInfo, emptyArchive, generationMap, relationTo, treePositions, validateArchive,
+  birthdayInfo, emptyArchive, generationMap, isSexAtBirth, relationTo, treePositions, validateArchive,
   uniquePeople, type FamilyArchive, type Person, type Relationship, type RelationshipType,
 } from './model'
 
@@ -27,7 +28,7 @@ const photoTypes = imageConfig.input.mimeTypes
 
 type Modal = 'admin' | 'key' | 'person' | 'relationship' | 'publish' | 'import-review' | null
 type View = { x: number; y: number; scale: number }
-type BusyAction = 'saving' | 'publishing' | 'exporting' | 'opening' | 'importing' | null
+type BusyAction = 'saving' | 'publishing' | 'exporting-json' | 'exporting-gedzip' | 'opening' | 'importing' | null
 
 function App() {
   const [language, setLanguage] = useState<Language>(browserLanguage)
@@ -170,7 +171,7 @@ function App() {
   }
   const exportPlainArchive = async () => {
     if (!window.confirm(t('plainExportWarning'))) return
-    setBusyAction('exporting')
+    setBusyAction('exporting-json')
     try {
       const hasEncryptedPhotos = archive.people.some((person) =>
         [person.photo, ...(person.gallery ?? [])].some((image) => image && isEncryptedImage(image)))
@@ -178,6 +179,22 @@ function App() {
       const plaintext = await decryptArchivePhotos(archive, passphrase)
       download(JSON.stringify(plaintext, null, 2), 'family-archive.json')
       setNotice(t('plainExported'))
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : t('exportFailure'))
+    } finally {
+      setBusyAction(null)
+    }
+  }
+  const exportGedcomArchive = async () => {
+    if (!window.confirm(t('gedcomExportWarning'))) return
+    setBusyAction('exporting-gedzip')
+    try {
+      const hasEncryptedPhotos = archive.people.some((person) =>
+        [person.photo, ...(person.gallery ?? [])].some((image) => image && isEncryptedImage(image)))
+      if (hasEncryptedPhotos && !passphrase) throw new Error(t('passphraseRequired'))
+      const packageBytes = await createGedzip(archive, passphrase)
+      downloadBlob(new Blob([packageBytes], { type: 'application/zip' }), 'family-tree.gdz')
+      setNotice(t('gedcomExported'))
     } catch (error) {
       setNotice(error instanceof Error ? error.message : t('exportFailure'))
     } finally {
@@ -463,15 +480,22 @@ function App() {
   const onAddPerson = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const data = new FormData(event.currentTarget)
+    const sexAtBirth = data.get('sexAtBirth')
     const person: Person = {
       id: crypto.randomUUID(),
       firstName: String(data.get('firstName')).trim(),
       lastName: String(data.get('lastName')).trim(),
+      ...(String(data.get('alternateName') ?? '').trim()
+        ? { alternateName: String(data.get('alternateName')).trim() } : {}),
+      ...(isSexAtBirth(sexAtBirth) ? { sexAtBirth } : {}),
       ...(parseDateInput(String(data.get('birthDate') ?? ''), language)
         ? { birthDate: parseDateInput(String(data.get('birthDate') ?? ''), language) } : {}),
       ...(parseDateInput(String(data.get('deathDate') ?? ''), language)
         ? { deathDate: parseDateInput(String(data.get('deathDate') ?? ''), language) } : {}),
       ...(data.get('birthPlace') ? { birthPlace: String(data.get('birthPlace')).trim() } : {}),
+      ...(String(data.get('profession') ?? '').trim() ? { profession: String(data.get('profession')).trim() } : {}),
+      ...(String(data.get('residence') ?? '').trim() ? { residence: String(data.get('residence')).trim() } : {}),
+      ...(String(data.get('nationality') ?? '').trim() ? { nationality: String(data.get('nationality')).trim() } : {}),
       ...(data.get('biography') ? { biography: String(data.get('biography')).trim() } : {}),
       ...(data.get('email') ? { email: String(data.get('email')).trim() } : {}),
       ...(data.get('whatsapp') ? { whatsapp: String(data.get('whatsapp')).trim() } : {}),
@@ -508,13 +532,19 @@ function App() {
     event.preventDefault()
     if (!editing) return
     const data = new FormData(event.currentTarget)
+    const sexAtBirth = data.get('sexAtBirth')
     const person: Person = {
       ...editing,
       firstName: String(data.get('firstName')).trim(),
       lastName: String(data.get('lastName')).trim(),
+      alternateName: String(data.get('alternateName') || '').trim() || undefined,
+      sexAtBirth: isSexAtBirth(sexAtBirth) ? sexAtBirth : undefined,
       birthDate: parseDateInput(String(data.get('birthDate') || ''), language),
       deathDate: parseDateInput(String(data.get('deathDate') || ''), language),
       birthPlace: String(data.get('birthPlace') || '') || undefined,
+      profession: String(data.get('profession') || '').trim() || undefined,
+      residence: String(data.get('residence') || '').trim() || undefined,
+      nationality: String(data.get('nationality') || '').trim() || undefined,
       biography: String(data.get('biography') || '') || undefined,
       email: String(data.get('email') || '') || undefined,
       whatsapp: String(data.get('whatsapp') || '') || undefined,
@@ -658,8 +688,16 @@ function App() {
       setClearingImageCache(false)
     }
   }
-  const download = (content: string, filename: string) => {
-    const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }))
+  const download = (content: string, filename: string, type = 'application/json') => {
+    const url = URL.createObjectURL(new Blob([content], { type }))
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = filename
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = url
     anchor.download = filename
@@ -808,7 +846,11 @@ function App() {
               {admin && <p className="empty-hint">{t('adminHint')}</p>}
             </div> : <>
               <svg ref={canvasRef} className="tree-canvas" role="group" aria-label={`${t('brand')} — ${archive.people.length} persone`}
-                onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
+                onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}
+                onClick={(event) => {
+                  if (event.target !== event.currentTarget || suppressClick.current) return
+                  setSelectedId(null)
+                }}>
                 <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
                   {familyConnectors.map(({ key, parentIds, childIds }) => {
                     if (![...parentIds, ...childIds].every((id) => filtered.some((person) => person.id === id))) return null
@@ -954,6 +996,14 @@ function App() {
                 {selected.birthDate && <div><span>{t('birth')}</span><strong>{formatDate(selected.birthDate, language)}</strong></div>}
                 {selected.deathDate && <div><span>{t('death')}</span><strong>{formatDate(selected.deathDate, language)}</strong></div>}
                 {selected.birthPlace && <div><span>{t('birthPlace')}</span><strong>{selected.birthPlace}</strong></div>}
+                {selected.alternateName && <div><span>{t('alternateName')}</span><strong>{selected.alternateName}</strong></div>}
+                {selected.sexAtBirth && <div><span>{t('sexAtBirth')}</span><strong>{t(
+                  selected.sexAtBirth === 'M' ? 'sexM' : selected.sexAtBirth === 'F' ? 'sexF'
+                    : selected.sexAtBirth === 'X' ? 'sexX' : 'sexU',
+                )}</strong></div>}
+                {selected.profession && <div><span>{t('profession')}</span><strong>{selected.profession}</strong></div>}
+                {selected.residence && <div><span>{t('residence')}</span><strong>{selected.residence}</strong></div>}
+                {selected.nationality && <div><span>{t('nationality')}</span><strong>{selected.nationality}</strong></div>}
               </div>
               {selected.biography && <section className="bio-block"><h3>{t('biography')}</h3><p>{selected.biography}</p></section>}
               {selected.notes && <section className="bio-block"><h3>{t('notes')}</h3><p>{selected.notes}</p></section>}
@@ -976,8 +1026,12 @@ function App() {
         <div className="dock-title"><ShieldCheck size={18} /><span><strong>{t('adminMode')}</strong><small>{t('adminHint')}</small></span></div>
         <div className="dock-actions"><button className="button button-primary" disabled={busyAction !== null} onClick={() => beginKeyFlow('save')}><Download size={16} />{t('save')}</button>
           <button className="button button-light" disabled={busyAction !== null} onClick={() => { void exportPlainArchive() }}>
-            {busyAction === 'exporting' ? <LoaderCircle className="button-spinner" size={15} /> : <Download size={16} />}
-            {busyAction === 'exporting' ? t('exportingArchive') : t('exportPlain')}
+            {busyAction === 'exporting-json' ? <LoaderCircle className="button-spinner" size={15} /> : <Download size={16} />}
+            {busyAction === 'exporting-json' ? t('exportingArchive') : t('exportPlain')}
+          </button>
+          <button className="button button-light" disabled={busyAction !== null} onClick={() => { void exportGedcomArchive() }}>
+            {busyAction === 'exporting-gedzip' ? <LoaderCircle className="button-spinner" size={15} /> : <Download size={16} />}
+            {busyAction === 'exporting-gedzip' ? t('exportingArchive') : t('exportGedcom')}
           </button>
           <label className={`button button-light ${busyAction === 'importing' ? 'is-busy' : ''}`}>
             {busyAction === 'importing' ? <LoaderCircle className="button-spinner" size={15} /> : <Upload size={16} />}
@@ -1072,8 +1126,19 @@ function App() {
           {modal === 'person' && <><div className="modal-symbol"><UserRoundPlus size={23} /></div><h2 id="modal-title">{editing ? t('editPerson') : t('addPerson')}</h2>
             <form className="form-stack person-form" onSubmit={editing ? onEditPerson : onAddPerson}>
               <div className="two-fields"><label>{t('firstName')}<input autoFocus name="firstName" required defaultValue={editing?.firstName} /></label><label>{t('lastName')}<input name="lastName" required defaultValue={editing?.lastName} /></label></div>
+              <label>{t('alternateName')}<input name="alternateName" defaultValue={editing?.alternateName} /></label>
+              <label>{t('sexAtBirth')}<select name="sexAtBirth" defaultValue={editing?.sexAtBirth ?? ''}>
+                <option value="">{t('notSpecified')}</option>
+                <option value="M">{t('sexM')}</option>
+                <option value="F">{t('sexF')}</option>
+                <option value="X">{t('sexX')}</option>
+                <option value="U">{t('sexU')}</option>
+              </select></label>
               <div className="two-fields"><label>{t('birthDate')}<input name="birthDate" inputMode="numeric" pattern={dateInputPattern(language)} placeholder={language === 'it' ? 'DD-MM-YYYY' : 'YYYY-MM-DD'} defaultValue={formatDateInput(editing?.birthDate, language)} /></label><label>{t('deathDate')}<input name="deathDate" inputMode="numeric" pattern={dateInputPattern(language)} placeholder={language === 'it' ? 'DD-MM-YYYY' : 'YYYY-MM-DD'} defaultValue={formatDateInput(editing?.deathDate, language)} /></label></div>
               <label>{t('birthPlace')}<input name="birthPlace" defaultValue={editing?.birthPlace} /></label>
+              <label>{t('profession')}<input name="profession" defaultValue={editing?.profession} /></label>
+              <label>{t('residence')}<input name="residence" defaultValue={editing?.residence} /></label>
+              <label>{t('nationality')}<input name="nationality" defaultValue={editing?.nationality} /></label>
               <label>{t('biography')}<textarea name="biography" rows={2} defaultValue={editing?.biography} /></label>
               <div className="two-fields"><label>{t('emailAddress')}<input name="email" type="email" defaultValue={editing?.email} /></label><label>WhatsApp<input name="whatsapp" type="tel" defaultValue={editing?.whatsapp} /></label></div>
               <label>{t('notes')}<textarea name="notes" rows={2} defaultValue={editing?.notes} /></label>

@@ -1,12 +1,22 @@
 export type RelationshipType = 'parent-child' | 'partner'
+export type SexAtBirth = 'M' | 'F' | 'X' | 'U'
+
+export function isSexAtBirth(value: unknown): value is SexAtBirth {
+  return value === 'M' || value === 'F' || value === 'X' || value === 'U'
+}
 
 export interface Person {
   id: string
   firstName: string
   lastName: string
+  alternateName?: string
+  sexAtBirth?: SexAtBirth
   birthDate?: string
   deathDate?: string
   birthPlace?: string
+  profession?: string
+  residence?: string
+  nationality?: string
   biography?: string
   email?: string
   whatsapp?: string
@@ -53,6 +63,14 @@ export function validateArchive(value: unknown): asserts value is FamilyArchive 
     if (typeof person.firstName !== 'string' || !person.firstName.trim() ||
       typeof person.lastName !== 'string' || !person.lastName.trim()) {
       throw new Error('Nome o cognome non valido.')
+    }
+    for (const field of ['alternateName', 'profession', 'residence', 'nationality'] as const) {
+      if (person[field] !== undefined && typeof person[field] !== 'string') {
+        throw new Error(`Il campo ${field} non è valido.`)
+      }
+    }
+    if (person.sexAtBirth !== undefined && !isSexAtBirth(person.sexAtBirth)) {
+      throw new Error('Il sesso alla nascita non è valido.')
     }
     for (const date of [person.birthDate, person.deathDate]) {
       if (date) {

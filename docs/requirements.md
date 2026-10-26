@@ -7,9 +7,11 @@ Consultazione e gestione responsive di un albero genealogico privato, pubblicabi
 ## Funzioni
 
 - Albero interattivo, schede persona, ricerca e filtri per generazione.
+- Su schermi touch in landscape, mantenere scorrevole la pagina quando la scheda persona è a fianco dell'albero; un tocco sullo sfondo dell'albero deseleziona la persona corrente senza interferire con pan/zoom.
 - Relazioni genitore-figlio e partner indipendenti.
 - Nel layout, allineare i partner quando compatibile con le generazioni, raggruppare i figli per genitori comuni e ridurre gli incroci con connettori familiari condivisi; preservare i dati originali nei casi incompatibili.
 - Modifica Admin separata dalla consultazione Viewer.
+- Scheda persona con nome alternativo, sesso alla nascita, professione, residenza e nazionalità opzionali.
 - Nell'interfaccia italiana, inserire e mostrare le date complete nel formato `DD-MM-YYYY`; mantenere le date ISO nell'archivio e usare formati localizzati per le altre lingue.
 - Prima di associare una fotografia a una persona, mostrare un editor di ritaglio quadrato utilizzabile con mouse e touch, con anteprima, spostamento e ridimensionamento della selezione. Correggere l'orientamento EXIF se supportato dal browser, normalizzare nel browser e non conservare i metadati originali. Validare tipo e dimensione in ingresso in base alla configurazione.
 - Normalizzare le immagini in JPEG nel browser, senza ingrandirle, con un massimo iniziale di **1200 × 1200 pixel**. `image-config.json` è la fonte versionata e autorevole per limiti, qualità, varianti e cache, ed è modificabile senza cambiare il codice applicativo.
@@ -20,7 +22,7 @@ Consultazione e gestione responsive di un albero genealogico privato, pubblicabi
 - Offrire facoltativamente il ricordo della passphrase, solo su consenso: cifrarla con Web Crypto e conservarla con una `CryptoKey` non esportabile in uno store IndexedDB separato. Non salvarla mai in chiaro o in local/session storage. Tentare l'apertura automatica e richiedere l'inserimento manuale se manca o non funziona; consentire di dimenticare la chiave salvata.
 - Non decifrare né generare tutte le foto all'apertura dell'archivio. Verificare e preparare tutte le immagini prima di completare un salvataggio o una pubblicazione; in caso di errore mantenere invariato l'archivio pubblicato.
 - Archivi JSON cifrati prima di download o pubblicazione; immagini incluse nell'archivio cifrato.
-- Import/export, tre lingue, GitHub Pages e pubblicazione opzionale tramite API.
+- Import JSON ed export JSON cifrato/in chiaro; l'Admin può esportare GEDZIP 7.0 in chiaro dopo conferma, con GEDCOM, foto principali e gallerie. I dati personali della scheda vengono mappati nei campi GEDCOM corrispondenti. Le immagini protette richiedono la passphrase dell'archivio; il pacchetto non include contatti. Tre lingue, GitHub Pages e pubblicazione opzionale tramite API.
 
 ## Requisiti non funzionali
 

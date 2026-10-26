@@ -1,9 +1,11 @@
 import 'fake-indexeddb/auto'
 import { act, cleanup, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { unzipSync } from 'fflate'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import * as cryptoModule from './crypto'
 import * as githubModule from './github'
+import * as gedzipModule from './gedzip'
 import type { FamilyArchive } from './model'
 import { clearRememberedPassphrase, getRememberedPassphrase, saveRememberedPassphrase } from './rememberedKey'
 
@@ -18,6 +20,39 @@ describe('family tree interface', () => {
     await clearRememberedPassphrase()
   })
 
+  it('clears the selected person when tapping the empty tree background', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 404 })))
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Admin' }))
+    fireEvent.change(screen.getByLabelText('Local Admin password'), { target: { value: 'moltisantitree' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add person' }))
+    fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Ada' } })
+    fireEvent.change(screen.getByLabelText('Last name'), { target: { value: 'Lovelace' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+
+    const personNode = await screen.findByRole('button', { name: 'Ada Lovelace' })
+    fireEvent.click(personNode)
+    expect(screen.getByRole('heading', { name: 'Ada Lovelace' })).toBeInTheDocument()
+
+    const canvas = document.querySelector('.tree-canvas')
+    if (!canvas) throw new Error('The genealogy tree canvas is not available.')
+    fireEvent.click(canvas)
+
+    expect(screen.queryByRole('heading', { name: 'Ada Lovelace' })).not.toBeInTheDocument()
+
+    fireEvent.click(personNode)
+    expect(screen.getByRole('heading', { name: 'Ada Lovelace' })).toBeInTheDocument()
+    fireEvent.pointerDown(canvas, { pointerId: 1, pointerType: 'touch', button: 0, clientX: 10, clientY: 10 })
+    fireEvent.pointerMove(canvas, { pointerId: 1, pointerType: 'touch', clientX: 40, clientY: 40 })
+    fireEvent.pointerUp(canvas, { pointerId: 1, pointerType: 'touch', clientX: 40, clientY: 40 })
+    fireEvent.click(canvas)
+
+    expect(screen.getByRole('heading', { name: 'Ada Lovelace' })).toBeInTheDocument()
+  })
+
   it('fetches the published archive without reusing a stale cached copy', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 404 }))
     vi.stubGlobal('fetch', fetchMock)
@@ -28,6 +63,81 @@ describe('family tree interface', () => {
     const [url, options] = fetchMock.mock.calls[0]!
     expect(url).toMatch(/family-archive\.enc\.json\?v=\d+$/)
     expect(options).toMatchObject({ cache: 'no-store' })
+  })
+
+  it('lets an admin confirm and download a GEDZIP 7.0 package', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 404 })))
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL')
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Admin' }))
+    fireEvent.change(screen.getByLabelText('Local Admin password'), { target: { value: 'moltisantitree' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Export GEDZIP 7.0' }))
+
+    expect(confirmSpy).toHaveBeenCalledWith(
+      'The GEDZIP package will contain unencrypted genealogy data, notes, sources, and all photos and galleries. It does not include contact details. The file is not encrypted; keep it secure. Continue?',
+    )
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(
+      'GEDZIP 7.0 package with photos exported in plaintext.',
+    ))
+    const blob = createObjectURL.mock.calls[0]![0]
+    if (!(blob instanceof Blob)) throw new Error('The GEDCOM download is not a Blob.')
+    expect(blob.type).toBe('application/zip')
+    const zip = unzipSync(new Uint8Array(await blob.arrayBuffer()))
+    expect(Object.keys(zip)).toEqual(['gedcom.ged'])
+    expect(new TextDecoder().decode(zip['gedcom.ged'])).toContain('2 VERS 7.0')
+  })
+
+  it('shows the loading spinner only on the export button in use', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 404 })))
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    let finishExport: ((zip: Uint8Array) => void) | undefined
+    vi.spyOn(gedzipModule, 'createGedzip').mockImplementation(() => new Promise((resolve) => {
+      finishExport = resolve
+    }))
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:gedzip-test')
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Admin' }))
+    fireEvent.change(screen.getByLabelText('Local Admin password'), { target: { value: 'moltisantitree' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+    const plainExport = screen.getByRole('button', { name: 'Export plaintext JSON' })
+    const gedzipExport = screen.getByRole('button', { name: 'Export GEDZIP 7.0' })
+    fireEvent.click(gedzipExport)
+    await waitFor(() => expect(gedzipModule.createGedzip).toHaveBeenCalled())
+    expect(gedzipExport.querySelector('.button-spinner')).toBeInTheDocument()
+    expect(plainExport.querySelector('.button-spinner')).not.toBeInTheDocument()
+
+    await act(async () => finishExport?.(new Uint8Array()))
+  })
+
+  it('saves and displays the optional genealogy fields on a person', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 404 })))
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Admin' }))
+    fireEvent.change(screen.getByLabelText('Local Admin password'), { target: { value: 'moltisantitree' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add person' }))
+    fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Alex' } })
+    fireEvent.change(screen.getByLabelText('Last name'), { target: { value: 'Family' } })
+    fireEvent.change(screen.getByLabelText('Alternate name'), { target: { value: 'Alexandra Alias' } })
+    fireEvent.change(screen.getByLabelText('Sex at birth'), { target: { value: 'F' } })
+    fireEvent.change(screen.getByLabelText('Occupation'), { target: { value: 'Researcher' } })
+    fireEvent.change(screen.getByLabelText('Residence'), { target: { value: 'Rome' } })
+    fireEvent.change(screen.getByLabelText('Nationality'), { target: { value: 'Italian' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+
+    expect(await screen.findByText('Alexandra Alias')).toBeInTheDocument()
+    expect(screen.getByText('Female')).toBeInTheDocument()
+    expect(screen.getByText('Researcher')).toBeInTheDocument()
+    expect(screen.getByText('Rome')).toBeInTheDocument()
+    expect(screen.getByText('Italian')).toBeInTheDocument()
   })
 
   it('fades a notification after ten seconds and then removes it', async () => {
