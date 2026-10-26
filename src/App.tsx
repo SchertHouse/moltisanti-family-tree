@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type PointerEvent } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent } from 'react'
 import {
   BookOpen, Check, ChevronDown, CircleHelp, Crosshair, Download, FileLock2, Heart, HeartCrack, KeyRound, LoaderCircle,
   Languages, LockKeyhole, Mail, Maximize, Maximize2, Minimize, Minus, MousePointer2, Pencil, Plus,
@@ -16,11 +16,11 @@ import { ProfilePhoto, TreePhoto } from './PhotoVariant'
 import { clearRememberedPassphrase, getRememberedPassphrase, saveRememberedPassphrase } from './rememberedKey'
 import { browserLanguage, translate, type Language, type TranslationKey } from './i18n'
 import {
-  dateInputPattern, finalizeDateDraft, formatCalendarDate, formatDate, formatDateDraft, formatDateInput, parseDateInput,
+  dateInputPattern, finalizeDateDraft, formatCalendarDate, formatCalendarMonth, formatDate, formatDateDraft, formatDateInput, parseDateInput,
 } from './dateInput'
 import { createGedzip } from './gedzip'
 import {
-  findKinshipPath, findKinshipRelationship, type KinshipDirectRole, type KinshipSex,
+  findKinshipPath, findKinshipRelationship, type KinshipBloodRelationship, type KinshipDirectRole, type KinshipRelationship, type KinshipSex,
 } from './kinship'
 import {
   birthdayInfo, emptyArchive, generationMap, isSexAtBirth, relationTo, treePositions, validateArchive,
@@ -62,6 +62,78 @@ function unionLabelKey(kind: UnionKind, status: UnionStatus): TranslationKey {
   return status === 'current' ? 'partnershipCurrent' : 'partnershipEnded'
 }
 
+type KinshipTranslator = (key: TranslationKey, values?: Record<string, string | number>) => string
+
+function describeBloodRelationship(relationship: KinshipBloodRelationship, t: KinshipTranslator): string {
+  if (relationship.type === 'ancestor') {
+    return relationship.generations > 5
+      ? t(relationship.role === 'ancestor' ? 'kinshipAncestorMany' : 'kinshipDescendantMany', {
+        generations: relationship.generations,
+      })
+      : t(kinshipDirectLabels[relationship.role][relationship.sex])
+  }
+  if (relationship.type === 'sibling') return t(kinshipSiblingLabels[relationship.sex])
+  if (relationship.type === 'avuncular') {
+    return relationship.role === 'uncle'
+      ? t(relationship.generations === 1
+        ? relationship.sex === 'male' ? 'kinshipUncle' : relationship.sex === 'female' ? 'kinshipAunt' : 'kinshipUncleGeneric'
+        : relationship.generations === 2
+          ? relationship.sex === 'male' ? 'kinshipGreatUncle' : relationship.sex === 'female' ? 'kinshipGreatAunt' : 'kinshipGreatUncleGeneric'
+          : 'kinshipUncleMany', { generations: relationship.generations })
+      : t(relationship.generations === 1
+        ? 'kinshipNieceNephew'
+        : relationship.generations === 2
+          ? 'kinshipGreatNieceNephew'
+          : 'kinshipNieceNephewMany', { generations: relationship.generations })
+  }
+  if (relationship.removed > 0) {
+    return t(relationship.sex === 'male'
+      ? 'kinshipCousinRemovedMale'
+      : relationship.sex === 'female' ? 'kinshipCousinRemovedFemale' : 'kinshipCousinRemoved', {
+      degree: relationship.degree,
+      generations: relationship.removed,
+    })
+  }
+  if (relationship.degree === 1) {
+    return t(relationship.sex === 'male' ? 'kinshipFirstCousinMale' : relationship.sex === 'female' ? 'kinshipFirstCousinFemale' : 'kinshipFirstCousin')
+  }
+  if (relationship.degree === 2) {
+    return t(relationship.sex === 'male' ? 'kinshipSecondCousinMale' : relationship.sex === 'female' ? 'kinshipSecondCousinFemale' : 'kinshipSecondCousin')
+  }
+  if (relationship.degree === 3) {
+    return t(relationship.sex === 'male' ? 'kinshipThirdCousinMale' : relationship.sex === 'female' ? 'kinshipThirdCousinFemale' : 'kinshipThirdCousin')
+  }
+  if (relationship.degree === 4) {
+    return t(relationship.sex === 'male' ? 'kinshipFourthCousinMale' : relationship.sex === 'female' ? 'kinshipFourthCousinFemale' : 'kinshipFourthCousin')
+  }
+  return t(relationship.sex === 'male' ? 'kinshipCousinManyMale' : relationship.sex === 'female' ? 'kinshipCousinManyFemale' : 'kinshipCousinMany', {
+    degree: relationship.degree,
+  })
+}
+
+function describeKinshipRelationship(relationship: KinshipRelationship, t: KinshipTranslator): string {
+  if (relationship.type === 'union') return t(unionLabelKey(relationship.kind, relationship.status))
+  if (relationship.type === 'affinity') {
+    const relative = relationship.relationship
+    const affinityKey: TranslationKey | null = relative.type === 'ancestor'
+      ? relationship.partner === 'selected'
+        ? relative.role === 'parent' ? 'kinshipStepParent'
+          : relative.role === 'child' ? 'kinshipInLawChild' : null
+        : relative.role === 'parent' ? 'kinshipInLawParent'
+          : relative.role === 'child' ? 'kinshipStepChild' : null
+      : relative.type === 'sibling' ? 'kinshipInLawSibling'
+        : relative.type === 'avuncular'
+          ? relative.role === 'uncle' ? 'kinshipInLawUncle' : 'kinshipInLawNiece'
+          : relative.type === 'cousin' ? 'kinshipInLawCousin' : null
+    return t('kinshipAffinity', {
+      union: t(unionLabelKey(relationship.kind, relationship.status)),
+      relationship: affinityKey ? t(affinityKey) : describeBloodRelationship(relative, t),
+    })
+  }
+  if (relationship.type === 'indirect') return t('kinshipIndirect')
+  return describeBloodRelationship(relationship, t)
+}
+
 function App() {
   const [language, setLanguage] = useState<Language>(browserLanguage)
   const languageRef = useRef(language)
@@ -75,6 +147,9 @@ function App() {
   const [rememberPassphrase, setRememberPassphrase] = useState(false)
   const [rememberedKeyAvailable, setRememberedKeyAvailable] = useState(false)
   const [modal, setModal] = useState<Modal>(null)
+  const modalRef = useRef(modal)
+  const modalTriggerRef = useRef<HTMLElement | null>(null)
+  useLayoutEffect(() => { modalRef.current = modal }, [modal])
   const [keyPurpose, setKeyPurpose] = useState<'open' | 'save'>('save')
   const [replaceKey, setReplaceKey] = useState(false)
   const [publishNewKey, setPublishNewKey] = useState(false)
@@ -118,10 +193,20 @@ function App() {
   const manualDateFields = useRef(new WeakSet<HTMLInputElement>())
 
   useEffect(() => {
-    const markKeyboardNavigation = () => { keyboardNavigationMode.current = true }
-    const markPointerNavigation = () => {
+    const markKeyboardNavigation = (event: KeyboardEvent) => {
+      keyboardNavigationMode.current = true
+      if (!modalRef.current && ['Enter', ' '].includes(event.key) &&
+        document.activeElement instanceof HTMLElement) {
+        modalTriggerRef.current = document.activeElement
+      }
+    }
+    const markPointerNavigation = (event: globalThis.PointerEvent) => {
       keyboardNavigationMode.current = false
       setKeyboardFocusedId(null)
+      const trigger = event.target instanceof Element
+        ? event.target.closest<HTMLElement>('button, a[href], input, select, textarea, [role="button"]')
+        : null
+      if (!modalRef.current && trigger) modalTriggerRef.current = trigger
     }
     window.addEventListener('keydown', markKeyboardNavigation)
     window.addEventListener('pointerdown', markPointerNavigation)
@@ -161,48 +246,9 @@ function App() {
   const kinshipRelationship = selected && kinshipPerson
     ? findKinshipRelationship(archive, selected.id, kinshipPerson.id)
     : null
-  const kinshipDescription = !kinshipRelationship
-    ? null
-    : kinshipRelationship.type === 'union'
-      ? t(unionLabelKey(kinshipRelationship.kind, kinshipRelationship.status))
-    : kinshipRelationship.type === 'ancestor'
-      ? kinshipRelationship.generations > 5
-        ? t(kinshipRelationship.role === 'ancestor' ? 'kinshipAncestorMany' : 'kinshipDescendantMany', {
-          generations: kinshipRelationship.generations,
-        })
-        : t(kinshipDirectLabels[kinshipRelationship.role][kinshipRelationship.sex])
-      : kinshipRelationship.type === 'sibling'
-        ? t(kinshipSiblingLabels[kinshipRelationship.sex])
-        : kinshipRelationship.type === 'avuncular'
-          ? kinshipRelationship.role === 'uncle'
-            ? t(kinshipRelationship.generations === 1
-              ? kinshipRelationship.sex === 'male' ? 'kinshipUncle' : kinshipRelationship.sex === 'female' ? 'kinshipAunt' : 'kinshipUncleGeneric'
-              : kinshipRelationship.generations === 2
-                ? kinshipRelationship.sex === 'male' ? 'kinshipGreatUncle' : kinshipRelationship.sex === 'female' ? 'kinshipGreatAunt' : 'kinshipGreatUncleGeneric'
-                : 'kinshipUncleMany', { generations: kinshipRelationship.generations })
-            : t(kinshipRelationship.generations === 1
-              ? 'kinshipNieceNephew'
-              : kinshipRelationship.generations === 2
-                ? 'kinshipGreatNieceNephew'
-                : 'kinshipNieceNephewMany', { generations: kinshipRelationship.generations })
-          : kinshipRelationship.removed > 0
-              ? t(kinshipRelationship.sex === 'male'
-                ? 'kinshipCousinRemovedMale'
-                : kinshipRelationship.sex === 'female' ? 'kinshipCousinRemovedFemale' : 'kinshipCousinRemoved', {
-                degree: kinshipRelationship.degree,
-                generations: kinshipRelationship.removed,
-              })
-              : kinshipRelationship.degree === 1
-                ? t(kinshipRelationship.sex === 'male' ? 'kinshipFirstCousinMale' : kinshipRelationship.sex === 'female' ? 'kinshipFirstCousinFemale' : 'kinshipFirstCousin')
-                : kinshipRelationship.degree === 2
-                  ? t(kinshipRelationship.sex === 'male' ? 'kinshipSecondCousinMale' : kinshipRelationship.sex === 'female' ? 'kinshipSecondCousinFemale' : 'kinshipSecondCousin')
-                  : kinshipRelationship.degree === 3
-                    ? t(kinshipRelationship.sex === 'male' ? 'kinshipThirdCousinMale' : kinshipRelationship.sex === 'female' ? 'kinshipThirdCousinFemale' : 'kinshipThirdCousin')
-                    : kinshipRelationship.degree === 4
-                      ? t(kinshipRelationship.sex === 'male' ? 'kinshipFourthCousinMale' : kinshipRelationship.sex === 'female' ? 'kinshipFourthCousinFemale' : 'kinshipFourthCousin')
-                      : t(kinshipRelationship.sex === 'male' ? 'kinshipCousinManyMale' : kinshipRelationship.sex === 'female' ? 'kinshipCousinManyFemale' : 'kinshipCousinMany', {
-                        degree: kinshipRelationship.degree,
-                      })
+  const kinshipDescription = kinshipRelationship
+    ? describeKinshipRelationship(kinshipRelationship, t)
+    : null
   const upcomingBirthday = selected?.birthDate && !selected.deathDate ? birthdayInfo(selected.birthDate) : null
   const generations = useMemo(() => generationMap(archive), [archive])
   const positions = useMemo(() => treePositions(archive), [archive])
@@ -584,12 +630,57 @@ function App() {
     return () => controller.abort()
   }, [])
 
-  const cancelModal = () => {
+  const cancelModal = useCallback(() => {
     setModal(null)
     setPendingArchive(null)
     setPendingPassphrase('')
     setCroppedPhoto(null)
-  }
+  }, [])
+
+  useEffect(() => {
+    if (!modal) return
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"][aria-modal="true"]')
+    if (!dialog) return
+    const focusable = () => [...dialog.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    )].filter((element) => !element.hasAttribute('hidden') && element.getAttribute('aria-hidden') !== 'true')
+    const initialFocus = dialog.querySelector<HTMLElement>('[autofocus]') ?? focusable()[0] ?? dialog
+    if (!dialog.contains(document.activeElement)) initialFocus.focus()
+    const keepFocusInDialog = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented && busyAction === null) {
+        event.preventDefault()
+        cancelModal()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const controls = focusable()
+      if (!controls.length) {
+        event.preventDefault()
+        dialog.focus()
+        return
+      }
+      const first = controls[0]!
+      const last = controls[controls.length - 1]!
+      if (!dialog.contains(document.activeElement) ||
+        (event.shiftKey && document.activeElement === first)) {
+        event.preventDefault()
+        const next = event.shiftKey ? last : first
+        next.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', keepFocusInDialog)
+    return () => {
+      document.removeEventListener('keydown', keepFocusInDialog)
+      if (modalRef.current === null) {
+        const trigger = modalTriggerRef.current
+        modalTriggerRef.current = null
+        if (trigger?.isConnected) trigger.focus()
+      }
+    }
+  }, [busyAction, cancelModal, modal])
 
   const formatDateField = (input: HTMLInputElement, finalize = false) => {
     const cursor = input.selectionStart ?? input.value.length
@@ -1228,6 +1319,7 @@ function App() {
                   label={t('kinshipCompare')}
                   placeholder={t('searchPerson')}
                   noResults={t('noPeopleFound')}
+                  clearLabel={t('kinshipClearCompare')}
                   onSelectFromTree={() => setSelectingKinshipPerson((active) => !active)}
                   selectingFromTree={selectingKinshipPerson}
                   selectFromTreeLabel={t(selectingKinshipPerson ? 'kinshipCancelTreeSelection' : 'kinshipSelectFromTree')}
@@ -1237,6 +1329,7 @@ function App() {
                     <strong>{t('kinshipPath')}</strong>
                     {kinshipDescription && <p><strong>{t('kinshipRelationshipType')}:</strong> {kinshipDescription}</p>}
                     {kinshipRelationship && kinshipRelationship.type !== 'union' &&
+                      kinshipRelationship.type !== 'affinity' && kinshipRelationship.type !== 'indirect' &&
                       <p><strong>{t('kinshipDegree')}:</strong> {t('kinshipDegreeValue', {
                       degree: kinshipRelationship.civilDegree,
                     })}</p>}
@@ -1268,8 +1361,11 @@ function App() {
                 <p className="muted-copy">{t('noFamilyConnections')}</p>}
             </section>
             {upcomingBirthday && <div className="birthday-card"><span className="birthday-icon">🎂</span>
-              <div><strong>{t('birthdayIn', { days: upcomingBirthday.days })}</strong>
-                <small>{formatCalendarDate(upcomingBirthday.date, language)}</small></div></div>}
+              <div>{upcomingBirthday.precision === 'day'
+                ? <><strong>{t('birthdayIn', { days: upcomingBirthday.days })}</strong>
+                  <small>{formatCalendarDate(upcomingBirthday.date, language)}</small></>
+                : <strong>{t('birthdayDuringMonth', { month: formatCalendarMonth(upcomingBirthday.month, language) })}</strong>}
+              </div></div>}
             <div className="detail-body">
               <div className="detail-facts">
                 {selected.birthDate && <div><span>{t('birth')}</span><strong>{formatDate(selected.birthDate, language)}</strong></div>}
@@ -1334,7 +1430,7 @@ function App() {
       {modal && <div className="modal-backdrop" onMouseDown={(event) => {
         if (event.target === event.currentTarget && busyAction === null) cancelModal()
       }}>
-        <section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabIndex={-1}>
           <button className="modal-close icon-button" aria-label={t('close')} disabled={busyAction !== null} onClick={cancelModal}><X size={18} /></button>
           {modal === 'admin' && <><div className="modal-symbol"><LockKeyhole size={23} /></div><h2 id="modal-title">{t('admin')}</h2><p>{t('adminHint')}</p>
             <form onSubmit={authenticateAdmin} className="form-stack"><label>{t('password')}<input autoFocus name="password" type="password" required /></label>
@@ -1524,6 +1620,7 @@ interface PersonSearchPickerProps {
   label: string
   placeholder: string
   noResults: string
+  clearLabel?: string
   onSelectFromTree?: () => void
   selectingFromTree?: boolean
   selectFromTreeLabel?: string
@@ -1536,6 +1633,7 @@ function PersonSearchPicker({
   label,
   placeholder,
   noResults,
+  clearLabel,
   onSelectFromTree,
   selectingFromTree = false,
   selectFromTreeLabel,
@@ -1556,45 +1654,59 @@ function PersonSearchPicker({
   return <div className="relationship-picker">
     <label htmlFor={id}>{label}</label>
     <div className="relationship-picker-input-row">
-      <input
-        id={id}
-        role="combobox"
-        aria-autocomplete="list"
-        aria-expanded={open}
-        aria-controls={`${id}-options`}
-        aria-activedescendant={open && options[activeIndex] ? `${id}-option-${activeIndex}` : undefined}
-        aria-required="true"
-        autoComplete="off"
-        value={open ? query : selected ? `${selected.firstName} ${selected.lastName}` : query}
-        placeholder={placeholder}
-        onFocus={() => {
-          setQuery('')
-          setActiveIndex(0)
-          setOpen(true)
-        }}
-        onChange={(event) => {
-          setQuery(event.target.value)
-          onChange('')
-          setActiveIndex(0)
-          setOpen(true)
-        }}
-        onBlur={() => setOpen(false)}
-        onKeyDown={(event) => {
-          if (event.key === 'ArrowDown') {
-            event.preventDefault()
+      <div className="relationship-picker-input">
+        <input
+          id={id}
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={open}
+          aria-controls={`${id}-options`}
+          aria-activedescendant={open && options[activeIndex] ? `${id}-option-${activeIndex}` : undefined}
+          aria-required="true"
+          autoComplete="off"
+          value={open ? query : selected ? `${selected.firstName} ${selected.lastName}` : query}
+          placeholder={placeholder}
+          onFocus={() => {
+            setQuery('')
+            setActiveIndex(0)
             setOpen(true)
-            setActiveIndex((index) => Math.max(0, Math.min(index + 1, options.length - 1)))
-          } else if (event.key === 'ArrowUp') {
-            event.preventDefault()
-            setActiveIndex((index) => Math.max(index - 1, 0))
-          } else if (event.key === 'Enter' && open && options[activeIndex]) {
-            event.preventDefault()
-            choose(options[activeIndex]!)
-          } else if (event.key === 'Escape') {
+          }}
+          onChange={(event) => {
+            setQuery(event.target.value)
+            onChange('')
+            setActiveIndex(0)
+            setOpen(true)
+          }}
+          onBlur={() => setOpen(false)}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowDown') {
+              event.preventDefault()
+              setOpen(true)
+              setActiveIndex((index) => Math.max(0, Math.min(index + 1, options.length - 1)))
+            } else if (event.key === 'ArrowUp') {
+              event.preventDefault()
+              setActiveIndex((index) => Math.max(index - 1, 0))
+            } else if (event.key === 'Enter' && open && options[activeIndex]) {
+              event.preventDefault()
+              choose(options[activeIndex]!)
+            } else if (event.key === 'Escape') {
+              setOpen(false)
+            }
+          }}
+        />
+        {clearLabel && selected && <button
+          type="button"
+          className="icon-button relationship-picker-clear"
+          aria-label={clearLabel}
+          title={clearLabel}
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={() => {
+            onChange('')
+            setQuery('')
             setOpen(false)
-          }
-        }}
-      />
+          }}
+        ><X size={15} /></button>}
+      </div>
       {onSelectFromTree && <button
         type="button"
         className={`icon-button relationship-picker-target ${selectingFromTree ? 'is-active' : ''}`}

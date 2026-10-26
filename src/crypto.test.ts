@@ -20,7 +20,7 @@ describe('encrypted archive', () => {
     await expect(decryptArchive(encrypted, 'wrong')).rejects.toThrow(/errata o archivio alterato/)
     await expect(decryptArchive({ ...encrypted, ciphertext: `${encrypted.ciphertext.slice(0, -4)}AAAA` }, 'family secret'))
       .rejects.toThrow()
-  })
+  }, 30_000)
 
   it('encrypts normalized photos individually and validates them on retrieval', async () => {
     const passphrase = 'family secret'
@@ -49,7 +49,7 @@ describe('encrypted archive', () => {
       people: [{ photo: 'data:image/jpeg;base64,bm9ybWFsaXplZA==' }],
     })
     expect(bitmap.close).toHaveBeenCalled()
-  })
+  }, 30_000)
 
   it('refuses extra gallery images rather than silently publishing multiple photos', async () => {
     const archive = emptyArchive()

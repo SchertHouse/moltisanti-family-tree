@@ -29,11 +29,22 @@ export type KinshipDirectRole =
   | 'descendant'
 
 export type KinshipRelationship =
+  | KinshipBloodRelationship
+  | { type: 'union'; kind: 'marriage' | 'partnership'; status: 'current' | 'ended'; endReason?: string }
+  | {
+    type: 'affinity'
+    relationship: KinshipBloodRelationship
+    kind: 'marriage' | 'partnership'
+    status: 'current' | 'ended'
+    partner: 'selected' | 'compared'
+  }
+  | { type: 'indirect'; bloodSteps: number; partnerSteps: number }
+
+export type KinshipBloodRelationship =
   | { type: 'ancestor'; role: KinshipDirectRole; generations: number; civilDegree: number; sex: KinshipSex }
   | { type: 'sibling'; civilDegree: number; sex: KinshipSex }
   | { type: 'avuncular'; role: 'uncle' | 'niece'; generations: number; civilDegree: number; sex: KinshipSex }
   | { type: 'cousin'; degree: number; removed: number; civilDegree: number; sex: KinshipSex }
-  | { type: 'union'; kind: 'marriage' | 'partnership'; status: 'current' | 'ended'; endReason?: string }
 
 export function findKinshipRelationship(
   archive: FamilyArchive,
@@ -47,13 +58,79 @@ export function findKinshipRelationship(
   const sex: KinshipSex = selected.sexAtBirth === 'M'
     ? 'male'
     : selected.sexAtBirth === 'F' ? 'female' : 'unspecified'
+  const bloodRelationship = findBloodRelationship(archive, fromId, toId)
+  if (bloodRelationship) return bloodRelationship
+
   const directUnions = archive.relationships.filter((relationship) => isUnionRelationship(relationship) &&
     ((relationship.from === fromId && relationship.to === toId) ||
       (relationship.from === toId && relationship.to === fromId)))
   const directUnion = directUnions.find((relationship) => unionDetails(relationship)?.status === 'current') ??
     directUnions.at(-1)
   const directUnionDetails = directUnion ? unionDetails(directUnion) : null
+  if (directUnionDetails) return { type: 'union', ...directUnionDetails }
 
+  const affinityRelationships: Array<Extract<KinshipRelationship, { type: 'affinity' }>> = []
+  const unionsFor = (personId: string) => archive.relationships
+    .filter((relationship) => isUnionRelationship(relationship) &&
+      (relationship.from === personId || relationship.to === personId))
+    .sort((left, right) =>
+      Number(unionDetails(right)?.status === 'current') - Number(unionDetails(left)?.status === 'current'))
+
+  for (const union of unionsFor(fromId)) {
+    const spouseId = union.from === fromId ? union.to : union.from
+    const relationship = findBloodRelationship(archive, spouseId, toId)
+    const details = unionDetails(union)
+    if (relationship && details) {
+      affinityRelationships.push({
+        type: 'affinity',
+        relationship: { ...relationship, sex },
+        kind: details.kind,
+        status: details.status,
+        partner: 'selected',
+      })
+    }
+  }
+
+  for (const union of unionsFor(toId)) {
+    const spouseId = union.from === toId ? union.to : union.from
+    const relationship = findBloodRelationship(archive, fromId, spouseId)
+    const details = unionDetails(union)
+    if (relationship && details) {
+      affinityRelationships.push({
+        type: 'affinity',
+        relationship: { ...relationship, sex },
+        kind: details.kind,
+        status: details.status,
+        partner: 'compared',
+      })
+    }
+  }
+
+  const closestAffinity = affinityRelationships.sort((left, right) =>
+    left.relationship.civilDegree - right.relationship.civilDegree ||
+    Number(right.status === 'current') - Number(left.status === 'current'))[0]
+  if (closestAffinity) return closestAffinity
+
+  const path = findKinshipPath(archive, fromId, toId)
+  return path ? {
+    type: 'indirect',
+    bloodSteps: path.bloodSteps,
+    partnerSteps: path.partnerSteps,
+  } : null
+}
+
+function findBloodRelationship(
+  archive: FamilyArchive,
+  fromId: string,
+  toId: string,
+): KinshipBloodRelationship | null {
+  if (fromId === toId) return null
+  const selected = archive.people.find((person) => person.id === fromId)
+  const compared = archive.people.find((person) => person.id === toId)
+  if (!selected || !compared) return null
+  const sex: KinshipSex = selected.sexAtBirth === 'M'
+    ? 'male'
+    : selected.sexAtBirth === 'F' ? 'female' : 'unspecified'
   const parentsByChild = new Map<string, string[]>()
   for (const relationship of archive.relationships) {
     if (relationship.type !== 'parent-child') continue
@@ -93,7 +170,7 @@ export function findKinshipRelationship(
       left.ancestorId.localeCompare(right.ancestorId))
 
   const closest = commonAncestors[0]
-  if (!closest) return directUnionDetails ? { type: 'union', ...directUnionDetails } : null
+  if (!closest) return null
   const civilDegree = closest.fromGenerations + closest.toGenerations
   if (closest.fromGenerations === 0 || closest.toGenerations === 0) {
     const selectedIsAncestor = closest.fromGenerations === 0

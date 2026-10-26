@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  dateInputPattern, finalizeDateDraft, formatCalendarDate, formatDate, formatDateDraft, formatDateInput, parseDateInput,
+  dateInputPattern, finalizeDateDraft, formatCalendarDate, formatCalendarMonth, formatDate, formatDateDraft, formatDateInput, parseDateInput,
 } from './dateInput'
 
 describe('localized date input', () => {
@@ -9,6 +9,13 @@ describe('localized date input', () => {
     expect(formatDateInput('2026-10-24', 'it')).toBe('24-10-2026')
     expect(formatDate('2026-10-24', 'it')).toBe('24-10-2026')
     expect(formatCalendarDate(new Date(2026, 9, 24), 'it')).toBe('24-10-2026')
+  })
+
+  it('formats standalone month names in the active locale', () => {
+    expect(formatCalendarMonth(5, 'it')).toBe('giugno')
+    expect(formatCalendarMonth(5, 'en')).toBe('June')
+    expect(formatCalendarMonth(5, 'eo')).toBe('Junio')
+    expect(() => formatCalendarMonth(12, 'it')).toThrow(RangeError)
   })
 
   it('preserves supported partial dates and non-Italian ISO input', () => {

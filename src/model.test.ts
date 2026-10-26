@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { birthdayInfo, emptyArchive, generationMap, relationTo, treePositions, uniquePeople, validateArchive } from './model'
+import { birthdayInfo, emptyArchive, generationMap, relationTo, treePositions, uniquePeople, validateArchive, type FamilyArchive } from './model'
 
 describe('family archive validation', () => {
   it('deduplicates people by ID and preserves their first-seen order', () => {
@@ -26,6 +26,26 @@ describe('family archive validation', () => {
         { id: 'r2', type: 'parent-child', from: 'b', to: 'a' },
       ],
     })).toThrow(/ciclo/)
+  })
+
+  it('validates a deep family line without using the JavaScript call stack', () => {
+    const people = Array.from({ length: 12_000 }, (_, index) => ({
+      id: `person-${index}`,
+      firstName: 'Person',
+      lastName: String(index),
+    }))
+    const archive: FamilyArchive = {
+      schemaVersion: 1,
+      people,
+      relationships: people.slice(1).map((person, index) => ({
+        id: `relationship-${index}`,
+        type: 'parent-child',
+        from: people[index]!.id,
+        to: person.id,
+      })),
+    }
+
+    expect(() => validateArchive(archive)).not.toThrow()
   })
 
   it('rejects impossible dates and photos pointing to an external URL', () => {
@@ -108,8 +128,27 @@ describe('family archive validation', () => {
 
 describe('birthday dates', () => {
   it('returns today as the next birthday and finds the next leap-day birthday', () => {
-    expect(birthdayInfo('1990-06-01', new Date(2026, 5, 1))?.days).toBe(0)
-    expect(birthdayInfo('2000-02-29', new Date(2025, 0, 1))?.date.getFullYear()).toBe(2028)
+    const today = birthdayInfo('1990-06-01', new Date(2026, 5, 1))
+    const leapDay = birthdayInfo('2000-02-29', new Date(2025, 0, 1))
+    expect(today?.precision).toBe('day')
+    expect(today?.precision === 'day' && today.days).toBe(0)
+    expect(leapDay?.precision === 'day' && leapDay.date.getFullYear()).toBe(2028)
+  })
+
+  it('shows a month-only reminder without inventing a day or countdown', () => {
+    expect(birthdayInfo('1990-06', new Date(2026, 5, 1))).toEqual({
+      precision: 'month',
+      month: 5,
+    })
+  })
+
+  it('does not show a birthday reminder when only the birth year is known', () => {
+    expect(birthdayInfo('1990', new Date(2026, 5, 1))).toBeNull()
+  })
+
+  it('rejects impossible birthday month and day values', () => {
+    expect(birthdayInfo('1990-13')).toBeNull()
+    expect(birthdayInfo('1990-02-30')).toBeNull()
   })
 })
 
@@ -379,6 +418,26 @@ describe('family tree layout', () => {
     expect(positions.get('mario')!.x).toBeGreaterThan(
       Math.max(...children.map((id) => positions.get(id)!.x)) + 80,
     )
+  })
+
+  it('lays out a large multigenerational tree without dropping nodes', () => {
+    const people = Array.from({ length: 1000 }, (_, index) => ({
+      id: `person-${index}`,
+      firstName: `Person ${index}`,
+      lastName: 'Family',
+    }))
+    const archive: FamilyArchive = {
+      schemaVersion: 1,
+      people,
+      relationships: people.slice(1).map((person, index) => ({
+        id: `relationship-${index}`,
+        type: 'parent-child',
+        from: people[index]!.id,
+        to: person.id,
+      })),
+    }
+
+    expect(treePositions(archive).size).toBe(people.length)
   })
 
 })

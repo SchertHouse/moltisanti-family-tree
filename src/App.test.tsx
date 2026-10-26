@@ -53,6 +53,34 @@ describe('family tree interface', () => {
     fireEvent.click(canvas)
 
     expect(screen.getByRole('heading', { name: 'Ada Lovelace' })).toBeInTheDocument()
+  }, 15_000)
+
+  it('traps keyboard focus in dialogs and restores focus to the opener', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 404 })))
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<App />)
+
+    const adminButton = await screen.findByRole('button', { name: 'Admin' })
+    adminButton.focus()
+    fireEvent.pointerDown(adminButton, { pointerId: 1, pointerType: 'mouse', button: 0 })
+    fireEvent.click(adminButton)
+
+    const dialog = await screen.findByRole('dialog', { name: 'Admin' })
+    expect(document.activeElement).toBe(screen.getByLabelText('Local Admin password'))
+
+    const closeButton = within(dialog).getByRole('button', { name: 'Close' })
+    closeButton.focus()
+    fireEvent.keyDown(closeButton, { key: 'Tab', shiftKey: true })
+    const confirmButton = within(dialog).getByRole('button', { name: 'Confirm' })
+    expect(document.activeElement).toBe(confirmButton)
+
+    fireEvent.keyDown(confirmButton, { key: 'Tab' })
+    expect(document.activeElement).toBe(closeButton)
+
+    fireEvent.keyDown(closeButton, { key: 'Escape' })
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(document.activeElement).toBe(adminButton)
   })
 
   it('moves keyboard focus to spatially adjacent nodes without a pointer focus ring', async () => {
@@ -118,7 +146,12 @@ describe('family tree interface', () => {
     expect(screen.getByRole('combobox', { name: 'Compare with' })).toHaveValue('Zoe Family')
     expect(screen.getByRole('heading', { name: 'Ada Family' })).toBeInTheDocument()
     expect(screen.queryByText('Select a person in the tree to compare.')).not.toBeInTheDocument()
-  })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear comparison person' }))
+
+    expect(screen.getByRole('combobox', { name: 'Compare with' })).toHaveValue('')
+    expect(screen.queryByText('Recorded relationship path')).not.toBeInTheDocument()
+  }, 15_000)
 
   it('fetches the published archive without reusing a stale cached copy', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 404 }))
@@ -247,6 +280,46 @@ describe('family tree interface', () => {
     expect(screen.getByText('Degree 1')).toBeInTheDocument()
     expect(screen.getByText('Child', { selector: 'span' })).toBeInTheDocument()
     expect(screen.getByText('Parent-child links: 1')).toBeInTheDocument()
+  })
+
+  it('shows affinity and omits consanguinity degree for a partner of a child', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 404 })))
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Admin' }))
+    fireEvent.change(screen.getByLabelText('Local Admin password'), { target: { value: 'moltisantitree' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    for (const firstName of ['Parent', 'Child', 'Spouse']) {
+      fireEvent.click(screen.getByRole('button', { name: 'Add person' }))
+      fireEvent.change(screen.getByLabelText('First name'), { target: { value: firstName } })
+      fireEvent.change(screen.getByLabelText('Last name'), { target: { value: 'Family' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    }
+
+    fireEvent.click(screen.getByRole('button', { name: 'Parent Family' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add a connection' }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Person' }), { target: { value: 'Child' } })
+    fireEvent.click(screen.getByRole('option', { name: 'Child Family' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Child Family' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add a connection' }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Relationship type' }), { target: { value: 'union' } })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Person' }), { target: { value: 'Spouse' } })
+    fireEvent.click(screen.getByRole('option', { name: 'Spouse Family' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Parent Family' }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Compare with' }), { target: { value: 'Spouse' } })
+    fireEvent.click(screen.getByRole('option', { name: 'Spouse Family' }))
+
+    const result = document.querySelector<HTMLElement>('.kinship-result')
+    if (!result) throw new Error('The kinship result is not available.')
+    expect(within(result).getByText(/By affinity through Current marriage: Parent-in-law/)).toBeInTheDocument()
+    expect(within(result).queryByText(/Degree of kinship:/)).not.toBeInTheDocument()
+    expect(within(result).getByText('Partner links: 1')).toBeInTheDocument()
   })
 
   it('fades a notification after ten seconds and then removes it', async () => {

@@ -29,17 +29,17 @@ Stato verificato per l'implementazione corrente; non sostituisce l'esecuzione de
 - [x] Navigazione spaziale tra i nodi con le frecce e indicatore di focus da tastiera distinto dalla selezione tramite puntatore.
 - [x] Ricaricare le immagini visibili nell'albero dopo aver svuotato la cache delle varianti.
 - [x] Inserire automaticamente i separatori nelle date digitando soltanto le cifre, mantenendo il supporto alle date parziali di solo anno.
-- [x] Calcolo del percorso di parentela registrato, della tipologia e del grado consanguineo in linea retta e collaterale, con termini gender-aware e cugini di grado arbitrario; tipo e stato delle unioni espliciti, senza dedurre affinità non registrate.
+- [x] Riepilogo compleanno per date complete e mese noto (`YYYY-MM`), senza inventare un giorno; il solo anno non produce un promemoria. Il 29 febbraio ricorre al successivo anno bisestile.
+- [x] Calcolo del percorso di parentela registrato, della tipologia e del grado consanguineo in linea retta e collaterale, con termini gender-aware e cugini di grado arbitrario; affinità tramite unioni registrate e percorso esplicito per i collegamenti indiretti non classificabili, senza attribuire loro un grado consanguineo né dedurre legami non registrati.
 - [x] Selezione della persona da confrontare direttamente dall'albero tramite il pulsante mirino accanto alla ricerca di parentela.
+- [x] Cancellazione della persona confrontata dal selettore di parentela con un pulsante accessibile.
+- [x] Suite E2E Playwright per Chromium, Firefox e WebKit desktop e per viewport touch-emulate Chromium/WebKit; i test isolano l'archivio e bloccano le richieste GitHub.
+- [x] Verifiche pre-rilascio del codice: focus da tastiera confinato nei dialoghi e ripristinato all'apertura, controlli accessibili etichettati, movimento ridotto, viewport stretto senza overflow, layout misurato fino a 5.000 persone e threat review dei percorsi client-side e di pubblicazione. Nessuna vulnerabilità critica o ad alto impatto confermata nel perimetro esaminato.
 
 ## Da completare
 
-- [ ] Test E2E reali multi-browser e touch su dispositivi.
-- [ ] Import/export ZIP e anteprima differenze prima dell'import.
-- [ ] Riepilogo per date di compleanno parziali (le date complete includono il calcolo dell'anno bisestile).
-- [ ] Gallerie fotografiche per profilo (il ritaglio quadrato della foto principale è implementato).
-- [ ] Audit accessibilità, prestazioni su alberi grandi e threat review prima del rilascio.
+- [ ] Verifica manuale dei flussi touch su telefoni e tablet fisici; l'emulazione browser non sostituisce dispositivi reali.
 
 ## Limitazioni
 
-Base iniziale senza dati demo per non rischiare di distribuire dati personali. Verifiche locali dipendono da Node/npm; la CI è il gate per la pubblicazione. L'API Contents pubblica un singolo archivio e non fornisce transazioni.
+Base iniziale senza dati demo per non rischiare di distribuire dati personali. Non sono pianificati un formato generico ZIP con anteprima differenze d'importazione né un'interfaccia per gestire gallerie fotografiche: l'import e l'export ordinari restano JSON, insieme all'export GEDZIP già disponibile. La CI esegue la matrice browser; la verifica touch su hardware fisico resta manuale. L'API Contents pubblica un singolo archivio e non fornisce transazioni.

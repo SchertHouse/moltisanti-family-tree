@@ -1,6 +1,6 @@
 # Sviluppo
 
-Richiede Node.js 22+ e npm. Installare con `npm ci`; avviare `npm run dev`; controllare con `npm run lint`, `npm test`, `npm run typecheck`, `npm run build`, `npm run check:dist`. Test di crittografia usano Web Crypto; i test GitHub mockano la rete.
+Richiede Node.js 22+ e npm. Installare con `npm ci`; avviare `npm run dev`; controllare con `npm run lint`, `npm test`, `npm run typecheck`, `npm run build`, `npm run check:dist`. `npm run test:e2e` esegue i flussi browser con Playwright in Chromium, Firefox, WebKit e viewport touch-emulate Chromium/WebKit; prima dell'esecuzione locale installare i browser con `npx playwright install chromium firefox webkit` e le dipendenze di sistema richieste con `npx playwright install-deps chromium firefox webkit` (richiede i permessi del package manager). CI esegue l'intera matrice con `--with-deps`. L'emulazione non sostituisce la verifica su telefoni/tablet fisici. Test di crittografia usano Web Crypto; i test GitHub mockano la rete.
 
 Usare componenti piccoli e TypeScript strict; niente stringhe UI nei componenti salvo eccezioni tecniche. La configurazione immagini autorevole è `image-config.json`: input massimo 8 MiB, massimo normalizzato iniziale 1200 × 1200, senza upscaling, JPEG qualità 0.9, varianti albero 128 e scheda 800, due elaborazioni simultanee e cache massima 200 voci/30 MiB. Modificare i limiti in quel file e non duplicarli nel codice.
 
@@ -9,3 +9,5 @@ Il ritaglio quadrato, orientamento EXIF, rimozione metadati e normalizzazione re
 Il ricordo della passphrase è opt-in: conservarla solo come ciphertext AES-GCM con `CryptoKey` non esportabile in IndexedDB dedicato, mai in local/session storage o in chiaro. La cache immagini e lo store delle credenziali devono restare separati. Testare roundtrip, ciphertext privo di passphrase in chiaro, rimozione, fallback a inserimento manuale e apertura automatica.
 
 Non usare dati reali nei test. Nessuna chiamata API esterna o commit nei test. Le traduzioni devono avere set di chiavi coerente in `it`, `en`, `eo`.
+
+La verifica pre-rilascio del 26-10-2026 ha controllato focus e ciclo da tastiera nei dialoghi, etichette accessibili dei controlli, movimento ridotto, viewport stretto senza overflow orizzontale, layout genealogico fino a 5.000 persone e i principali confini di sicurezza descritti in `security.md`. La suite unitaria include anche alberi profondi per la validazione e il layout; i risultati della revisione e le verifiche che richiedono hardware fisico sono riportati nella roadmap e nel documento sicurezza.

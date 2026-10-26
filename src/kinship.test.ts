@@ -261,6 +261,99 @@ describe('kinship paths', () => {
       })
     })
 
+    it('identifies parent-in-law and child-in-law relationships through a recorded union', () => {
+      const family: FamilyArchive = {
+        schemaVersion: 1,
+        people: [
+          { id: 'parent', firstName: 'Parent', lastName: 'Family', sexAtBirth: 'M' },
+          { id: 'child', firstName: 'Child', lastName: 'Family' },
+          { id: 'spouse', firstName: 'Spouse', lastName: 'Family', sexAtBirth: 'F' },
+        ],
+        relationships: [
+          parentChild('parent', 'child', 'parent-child'),
+          {
+            id: 'union',
+            type: 'union',
+            from: 'child',
+            to: 'spouse',
+            unionKind: 'partnership',
+            unionStatus: 'current',
+          },
+        ],
+      }
+
+      expect(findKinshipRelationship(family, 'parent', 'spouse')).toEqual({
+        type: 'affinity',
+        relationship: {
+          type: 'ancestor',
+          role: 'parent',
+          generations: 1,
+          civilDegree: 1,
+          sex: 'male',
+        },
+        kind: 'partnership',
+        status: 'current',
+        partner: 'compared',
+      })
+      expect(findKinshipRelationship(family, 'spouse', 'parent')).toEqual({
+        type: 'affinity',
+        relationship: {
+          type: 'ancestor',
+          role: 'child',
+          generations: 1,
+          civilDegree: 1,
+          sex: 'female',
+        },
+        kind: 'partnership',
+        status: 'current',
+        partner: 'selected',
+      })
+    })
+
+    it('retains ended union status when calculating affinity', () => {
+      const family: FamilyArchive = {
+        schemaVersion: 1,
+        people: people(['parent', 'child', 'spouse']),
+        relationships: [
+          parentChild('parent', 'child', 'parent-child'),
+          {
+            id: 'union',
+            type: 'union',
+            from: 'child',
+            to: 'spouse',
+            unionKind: 'marriage',
+            unionStatus: 'ended',
+          },
+        ],
+      }
+
+      expect(findKinshipRelationship(family, 'parent', 'spouse')).toMatchObject({
+        type: 'affinity',
+        kind: 'marriage',
+        status: 'ended',
+        partner: 'compared',
+      })
+    })
+
+    it('describes connected paths with multiple unions when no single affinity term applies', () => {
+      const family: FamilyArchive = {
+        schemaVersion: 1,
+        people: people(['a', 'b', 'c', 'd', 'e']),
+        relationships: [
+          parentChild('a', 'b', '1'),
+          { id: '2', type: 'union', from: 'b', to: 'c', unionKind: 'marriage', unionStatus: 'current' },
+          parentChild('c', 'd', '3'),
+          { id: '4', type: 'partner', from: 'd', to: 'e' },
+        ],
+      }
+
+      expect(findKinshipRelationship(family, 'a', 'e')).toEqual({
+        type: 'indirect',
+        bloodSteps: 2,
+        partnerSteps: 2,
+      })
+    })
+
     it('uses recorded sex to distinguish gendered direct-line and collateral terms', () => {
       const family: FamilyArchive = {
         schemaVersion: 1,

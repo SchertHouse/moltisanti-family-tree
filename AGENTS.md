@@ -36,6 +36,8 @@ La password Admin `moltisantitree` è pubblicamente visibile nel codice e serve 
 
 Richiedere Node.js 22+. Usare `npm ci`, `npm run lint`, `npm test`, `npm run typecheck`, `npm run build`. Modifiche a requisiti, architettura, sicurezza o UX devono aggiornare il documento relativo e `docs/roadmap.md`. Leggere `docs/security.md` prima di toccare crittografia o pubblicazione.
 
+Mantenere aggiornato `.gitignore` quando build, test o nuovi strumenti producono file locali non destinati al repository. Prima di ignorare un percorso, verificare che non contenga sorgenti, fixture o snapshot intenzionali da versionare; controllare inoltre con `git ls-files` se eventuali artefatti indesiderati sono già tracciati.
+
 ## Limitazioni correnti
 
 Consultare `docs/roadmap.md`: non presentare funzionalità pianificate come implementate. L'app è una protezione dei dati a riposo, non una soluzione di autenticazione o un confine sicuro contro codice client malevolo.

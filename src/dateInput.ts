@@ -68,6 +68,12 @@ export function formatCalendarDate(date: Date, language: Language): string {
   return formatDate(value, language)
 }
 
+export function formatCalendarMonth(month: number, language: Language): string {
+  if (!Number.isInteger(month) || month < 0 || month > 11) throw new RangeError('Month must be between 0 and 11.')
+  const locale = language === 'eo' ? 'eo' : language
+  return new Intl.DateTimeFormat(locale, { month: 'long' }).format(new Date(2020, month, 1))
+}
+
 export function dateInputPattern(language: Language): string {
   return language === 'it'
     ? '[0-9]{2}-[0-9]{2}-[0-9]{4}|[0-9]{2}-[0-9]{4}|[0-9]{4}'

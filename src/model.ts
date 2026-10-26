@@ -154,16 +154,26 @@ export function validateArchive(value: unknown): asserts value is FamilyArchive 
   }
   const visited = new Set<string>()
   const active = new Set<string>()
-  const hasCycle = (id: string): boolean => {
-    if (active.has(id)) return true
-    if (visited.has(id)) return false
+  for (const id of ids) {
+    if (visited.has(id)) continue
+    const stack = [{ id, nextChild: 0, children: parents.get(id) ?? [] }]
     active.add(id)
-    for (const child of parents.get(id) ?? []) if (hasCycle(child)) return true
-    active.delete(id)
-    visited.add(id)
-    return false
+    while (stack.length > 0) {
+      const current = stack[stack.length - 1]!
+      const child = current.children[current.nextChild]
+      if (child === undefined) {
+        stack.pop()
+        active.delete(current.id)
+        visited.add(current.id)
+        continue
+      }
+      current.nextChild += 1
+      if (active.has(child)) throw new Error('Le relazioni genitoriali contengono un ciclo.')
+      if (visited.has(child)) continue
+      active.add(child)
+      stack.push({ id: child, nextChild: 0, children: parents.get(child) ?? [] })
+    }
   }
-  for (const id of ids) if (hasCycle(id)) throw new Error('Le relazioni genitoriali contengono un ciclo.')
 }
 
 export function relationTo(
@@ -241,11 +251,20 @@ export function generationMap(archive: FamilyArchive): Map<string, number> {
   return new Map(archive.people.map((person) => [person.id, levels.get(groups.find(person.id)) ?? 0]))
 }
 
-export function birthdayInfo(date: string | undefined, today = new Date()): { date: Date; days: number } | null {
-  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null
-  const [, monthValue, dayValue] = date.split('-').map(Number)
-  const month = monthValue! - 1
-  const day = dayValue!
+export type BirthdayInfo =
+  | { precision: 'day'; date: Date; days: number }
+  | { precision: 'month'; month: number }
+
+export function birthdayInfo(date: string | undefined, today = new Date()): BirthdayInfo | null {
+  if (!date || !/^\d{4}(?:-\d{2}(?:-\d{2})?)?$/.test(date)) return null
+  const [, monthValue, dayValue] = date.split('-')
+  if (!monthValue) return null
+  const month = Number(monthValue) - 1
+  if (month < 0 || month > 11) return null
+  if (!dayValue) return { precision: 'month', month }
+  const day = Number(dayValue)
+  const birthDate = new Date(2000, month, day)
+  if (birthDate.getMonth() !== month || birthDate.getDate() !== day) return null
   const leap = (year: number) => year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
   const start = new Date(today.getFullYear(), today.getMonth(), today.getDate())
   let year = today.getFullYear()
@@ -257,7 +276,11 @@ export function birthdayInfo(date: string | undefined, today = new Date()): { da
       next = new Date(year, month, day)
     }
   } else if (next < start) next = new Date(year + 1, month, day)
-  return { date: next, days: Math.round((next.getTime() - start.getTime()) / 86_400_000) }
+  return {
+    precision: 'day',
+    date: next,
+    days: Math.round((next.getTime() - start.getTime()) / 86_400_000),
+  }
 }
 
 export function treePositions(archive: FamilyArchive): Map<string, { x: number; y: number }> {
@@ -311,9 +334,10 @@ export function treePositions(archive: FamilyArchive): Map<string, { x: number; 
     siblingFamilies.set(familyKey, familyGroups)
   }
 
-  const maxLevel = Math.max(0, ...groups.map((group) => group.level))
-  const layers = Array.from({ length: maxLevel + 1 }, (_, level) =>
-    groups.filter((group) => group.level === level).sort((a, b) => a.id.localeCompare(b.id)))
+  const maxLevel = groups.reduce((maximum, group) => Math.max(maximum, group.level), 0)
+  const layers = Array.from({ length: maxLevel + 1 }, () => [] as LayoutGroup[])
+  for (const group of groups) layers[group.level]!.push(group)
+  for (const layer of layers) layer.sort((a, b) => a.id.localeCompare(b.id))
   for (let pass = 0; pass < 12; pass += 1) {
     const previousOrder = layers.map((layer) => layer.map((group) => group.id).join('\u0000'))
     for (let level = 1; level <= maxLevel; level += 1) {
@@ -350,10 +374,10 @@ export function treePositions(archive: FamilyArchive): Map<string, { x: number; 
     if (maximumMovement < 0.01) break
   }
 
-  const minimumX = Math.min(...groups.map((group) =>
-    groupCenters.get(group.id)! - groupWidth(group.people.length) / 2))
-  const maximumX = Math.max(...groups.map((group) =>
-    groupCenters.get(group.id)! + groupWidth(group.people.length) / 2))
+  const minimumX = groups.reduce((minimum, group) =>
+    Math.min(minimum, groupCenters.get(group.id)! - groupWidth(group.people.length) / 2), Infinity)
+  const maximumX = groups.reduce((maximum, group) =>
+    Math.max(maximum, groupCenters.get(group.id)! + groupWidth(group.people.length) / 2), -Infinity)
   const translateX = 500 - (minimumX + maximumX) / 2
   const positions = new Map<string, { x: number; y: number }>()
   for (const [level, layer] of layers.entries()) {
@@ -459,6 +483,21 @@ function positionLayer(
   anchors: Map<string, LayoutAnchor[]>,
   centers: Map<string, number>,
 ): void {
+  if (layer.length === 1) {
+    const group = layer[0]!
+    const neighborCenters = (anchors.get(group.id) ?? [])
+      .map((anchor) => {
+        const neighborCenter = centers.get(anchor.neighborId)
+        return neighborCenter === undefined
+          ? undefined
+          : neighborCenter + anchor.neighborOffset - anchor.ownOffset
+      })
+      .filter((center): center is number => center !== undefined)
+    if (neighborCenters.length) {
+      centers.set(group.id, neighborCenters.reduce((total, center) => total + center, 0) / neighborCenters.length)
+    }
+    return
+  }
   const offsets = [0]
   for (let index = 1; index < layer.length; index += 1) {
     offsets.push(offsets[index - 1]! +
@@ -508,6 +547,7 @@ function reorderLayer(
   links: Map<string, Set<string>>,
   siblingFamilies: Map<string, Set<string>>,
 ): void {
+  if (layer.length < 2) return
   const neighborCenter = new Map<string, number>()
   let neighborLeft = 0
   for (const group of neighbors) {
