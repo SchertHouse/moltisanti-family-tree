@@ -9,7 +9,7 @@ Consultazione e gestione responsive di un albero genealogico privato, pubblicabi
 - Albero interattivo, schede persona, ricerca e filtri per generazione.
 - Nella scheda di dettaglio, consentire la ricerca di una seconda persona e mostrare il percorso minimo dei legami registrati tra le due, separando legami genitore-figlio e partner; non inferire relazioni non presenti nell'archivio.
 - Navigazione da tastiera dell'albero con le frecce verso il nodo spazialmente adiacente; il focus visibile non deve apparire come un contorno aggiuntivo dopo una selezione tramite mouse o touch.
-- Su schermi touch in landscape, mantenere scorrevole la pagina quando la scheda persona è a fianco dell'albero; un tocco sullo sfondo dell'albero deseleziona la persona corrente senza interferire con pan/zoom né modificare la posizione corrente dell'albero.
+- Su schermi touch in landscape, consentire lo scorrimento della scheda di dettaglio quando è a fianco dell'albero e il contenuto supera lo spazio disponibile; un tocco sullo sfondo dell'albero deseleziona la persona corrente senza interferire con pan/zoom né modificare la posizione corrente dell'albero.
 - Relazioni genitore-figlio e partner indipendenti.
 - Nel layout, allineare i partner quando compatibile con le generazioni, raggruppare i figli per genitori comuni e ridurre gli incroci con connettori familiari condivisi; preservare i dati originali nei casi incompatibili.
 - Modifica Admin separata dalla consultazione Viewer.

@@ -324,7 +324,13 @@ h1 { font: 800 30px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; letter-spacin
 @media (orientation: landscape) and (max-height: 500px) and (min-width: 761px) {
   .workspace { align-items: start; min-height: 0; }
   .detail-panel { min-height: 0; }
-  .detail-panel.has-selection { min-height: 0; max-height: none; overflow: visible; overscroll-behavior: auto; }
+  .detail-panel.has-selection {
+    min-height: 0;
+    max-height: min(75vh, 760px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
