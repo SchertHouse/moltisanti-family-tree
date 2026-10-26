@@ -491,6 +491,7 @@ describe('family tree interface', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
 
     expect(await screen.findByText('Ended marriage')).toBeInTheDocument()
+    expect(document.querySelector('.partner-heart-broken')).toBeInTheDocument()
   })
 
   it('lets an admin create and inspect a person without persisting the archive', async () => {

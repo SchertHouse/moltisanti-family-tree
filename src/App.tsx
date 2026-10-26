@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type PointerEvent } from 'react'
 import {
-  BookOpen, Check, ChevronDown, CircleHelp, Crosshair, Download, FileLock2, Heart, KeyRound, LoaderCircle,
+  BookOpen, Check, ChevronDown, CircleHelp, Crosshair, Download, FileLock2, Heart, HeartCrack, KeyRound, LoaderCircle,
   Languages, LockKeyhole, Mail, Maximize, Maximize2, Minimize, Minus, MousePointer2, Pencil, Plus,
   Search, ShieldCheck, Sparkles, Trash2, Upload, UserRoundPlus, Users, X,
 } from 'lucide-react'
@@ -1053,9 +1053,15 @@ function App() {
                       ? `M ${from.x + direction * 80} ${from.y} L ${to.x - direction * 80} ${to.y}`
                       : `M ${from.x + direction * 80} ${from.y} C ${from.x + direction * 105} ${from.y - 15}, ${to.x - direction * 105} ${to.y - 15}, ${to.x - direction * 80} ${to.y}`
                     const union = unionDetails(relationship)
+                    const brokenHeart = union?.status === 'ended' &&
+                      ['divorce', 'annulment', 'separation', 'other'].includes(union.endReason ?? '')
                     return <g key={relationship.id} className={union?.status === 'ended' ? 'ended-union' : ''}>
                       <path className="partner-line" d={path} />
-                      <Heart className="partner-heart" x={(from.x + to.x) / 2 - 6} y={(from.y + to.y) / 2 - 6} size={12} />
+                      {brokenHeart
+                        ? <HeartCrack className="partner-heart partner-heart-broken" aria-hidden="true"
+                          x={(from.x + to.x) / 2 - 6} y={(from.y + to.y) / 2 - 6} size={12} />
+                        : <Heart className="partner-heart" aria-hidden="true"
+                          x={(from.x + to.x) / 2 - 6} y={(from.y + to.y) / 2 - 6} size={12} />}
                     </g>
                   })}
                   {filtered.map((person) => {

@@ -81,6 +81,7 @@ h1 { font: 800 30px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; letter-spacin
 .partner-line { fill: none; stroke: #dfb08d; stroke-width: 2; stroke-dasharray: 5 5; }
 .ended-union .partner-line { stroke-dasharray: 2 5; opacity: .55; }
 .partner-heart { color: #d59068; fill: #fffefa; }
+.partner-heart-broken { color: #a86460; }
 .person-node { cursor: pointer; transition: opacity .15s; }
 .person-node:focus { outline: none; }
 .person-node.keyboard-focused { outline: 3px solid #c8834e; outline-offset: 3px; }

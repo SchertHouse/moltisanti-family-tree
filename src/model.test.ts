@@ -178,6 +178,40 @@ describe('family tree layout', () => {
     expect(levels.get('descendant')).toBe(levels.get('ancestor')! + 1)
   })
 
+  it('keeps former spouses together but does not group former partnerships', () => {
+    const archive = emptyArchive()
+    archive.people = [
+      { id: 'spouse-a', firstName: 'Ada', lastName: 'Family' },
+      { id: 'spouse-b', firstName: 'Bea', lastName: 'Family' },
+      { id: 'partner-a', firstName: 'Cora', lastName: 'Family' },
+      { id: 'partner-b', firstName: 'Dina', lastName: 'Family' },
+    ]
+    archive.relationships = [
+      {
+        id: 'former-marriage',
+        type: 'union',
+        from: 'spouse-a',
+        to: 'spouse-b',
+        unionKind: 'marriage',
+        unionStatus: 'ended',
+        unionEndReason: 'divorce',
+      },
+      {
+        id: 'former-partnership',
+        type: 'union',
+        from: 'partner-a',
+        to: 'partner-b',
+        unionKind: 'partnership',
+        unionStatus: 'ended',
+        unionEndReason: 'separation',
+      },
+    ]
+
+    const positions = treePositions(archive)
+    expect(Math.abs(positions.get('spouse-a')!.x - positions.get('spouse-b')!.x)).toBe(190)
+    expect(Math.abs(positions.get('partner-a')!.x - positions.get('partner-b')!.x)).toBeGreaterThan(190)
+  })
+
   it('orders child branches to follow the relative order of their parents', () => {
     const archive = emptyArchive()
     archive.people = [

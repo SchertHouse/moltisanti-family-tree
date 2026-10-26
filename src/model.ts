@@ -385,9 +385,10 @@ function partnerGroups(archive: FamilyArchive): PartnerGroups {
     return parent.get(personId)!
   }
   const parentChild = archive.relationships.filter((relationship) => relationship.type === 'parent-child')
-  const partners = archive.relationships.filter((relationship) => {
+  const layoutUnions = archive.relationships.filter((relationship) => {
     if (!isUnionRelationship(relationship)) return false
-    return unionDetails(relationship)?.status === 'current'
+    const details = unionDetails(relationship)
+    return details?.status === 'current' || details?.kind === 'marriage'
   })
     .sort((a, b) => {
       const aKey = [a.from, a.to].sort().join('\u0000')
@@ -395,7 +396,7 @@ function partnerGroups(archive: FamilyArchive): PartnerGroups {
       return aKey.localeCompare(bKey)
     })
 
-  for (const relationship of partners) {
+  for (const relationship of layoutUnions) {
     const first = find(relationship.from)
     const second = find(relationship.to)
     if (first === second) continue
