@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type PointerEvent } from 'react'
 import {
-  BookOpen, Check, ChevronDown, CircleHelp, Download, FileLock2, Heart, KeyRound, LoaderCircle,
+  BookOpen, Check, ChevronDown, CircleHelp, Crosshair, Download, FileLock2, Heart, KeyRound, LoaderCircle,
   Languages, LockKeyhole, Mail, Maximize, Maximize2, Minimize, Minus, MousePointer2, Pencil, Plus,
   Search, ShieldCheck, Sparkles, Trash2, Upload, UserRoundPlus, Users, X,
 } from 'lucide-react'
@@ -14,12 +14,14 @@ import imageConfig from '../image-config.json'
 import { clearImageCache } from './imageVariants'
 import { ProfilePhoto, TreePhoto } from './PhotoVariant'
 import { clearRememberedPassphrase, getRememberedPassphrase, saveRememberedPassphrase } from './rememberedKey'
-import { browserLanguage, translate, type Language } from './i18n'
+import { browserLanguage, translate, type Language, type TranslationKey } from './i18n'
 import {
   dateInputPattern, finalizeDateDraft, formatCalendarDate, formatDate, formatDateDraft, formatDateInput, parseDateInput,
 } from './dateInput'
 import { createGedzip } from './gedzip'
-import { findKinshipPath } from './kinship'
+import {
+  findKinshipPath, findKinshipRelationship, type KinshipDirectRole, type KinshipSex,
+} from './kinship'
 import {
   birthdayInfo, emptyArchive, generationMap, isSexAtBirth, relationTo, treePositions, validateArchive,
   uniquePeople, type FamilyArchive, type Person, type Relationship, type RelationshipType,
@@ -33,6 +35,27 @@ type Modal = 'admin' | 'key' | 'person' | 'relationship' | 'publish' | 'import-r
 type View = { x: number; y: number; scale: number }
 type BusyAction = 'saving' | 'publishing' | 'exporting-json' | 'exporting-gedzip' | 'opening' | 'importing' | null
 
+const kinshipDirectLabels: Record<KinshipDirectRole, Record<KinshipSex, TranslationKey>> = {
+  parent: { male: 'kinshipFather', female: 'kinshipMother', unspecified: 'kinshipParent' },
+  grandparent: { male: 'kinshipGrandfather', female: 'kinshipGrandmother', unspecified: 'kinshipGrandparent' },
+  greatGrandparent: { male: 'kinshipGreatGrandfather', female: 'kinshipGreatGrandmother', unspecified: 'kinshipGreatGrandparent' },
+  greatGreatGrandparent: { male: 'kinshipGreatGreatGrandfather', female: 'kinshipGreatGreatGrandmother', unspecified: 'kinshipGreatGreatGrandparent' },
+  greatGreatGreatGrandparent: { male: 'kinshipGreatGreatGreatGrandfather', female: 'kinshipGreatGreatGreatGrandmother', unspecified: 'kinshipGreatGreatGreatGrandparent' },
+  ancestor: { male: 'kinshipAncestorMale', female: 'kinshipAncestorFemale', unspecified: 'kinshipAncestor' },
+  child: { male: 'kinshipSon', female: 'kinshipDaughter', unspecified: 'kinshipChildGeneric' },
+  grandchild: { male: 'kinshipGrandson', female: 'kinshipGranddaughter', unspecified: 'kinshipGrandchild' },
+  greatGrandchild: { male: 'kinshipGreatGrandson', female: 'kinshipGreatGranddaughter', unspecified: 'kinshipGreatGrandchild' },
+  greatGreatGrandchild: { male: 'kinshipGreatGreatGrandson', female: 'kinshipGreatGreatGranddaughter', unspecified: 'kinshipGreatGreatGrandchild' },
+  greatGreatGreatGrandchild: { male: 'kinshipGreatGreatGreatGrandson', female: 'kinshipGreatGreatGreatGranddaughter', unspecified: 'kinshipGreatGreatGreatGrandchild' },
+  descendant: { male: 'kinshipDescendantMale', female: 'kinshipDescendantFemale', unspecified: 'kinshipDescendant' },
+}
+
+const kinshipSiblingLabels: Record<KinshipSex, TranslationKey> = {
+  male: 'kinshipBrother',
+  female: 'kinshipSister',
+  unspecified: 'kinshipSibling',
+}
+
 function App() {
   const [language, setLanguage] = useState<Language>(browserLanguage)
   const languageRef = useRef(language)
@@ -40,6 +63,7 @@ function App() {
   const [archive, setArchive] = useState<FamilyArchive>(emptyArchive)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [kinshipPersonId, setKinshipPersonId] = useState('')
+  const [selectingKinshipPerson, setSelectingKinshipPerson] = useState(false)
   const [admin, setAdmin] = useState(false)
   const [passphrase, setPassphrase] = useState('')
   const [rememberPassphrase, setRememberPassphrase] = useState(false)
@@ -121,10 +145,55 @@ function App() {
   }, [language])
 
   const selected = archive.people.find((person) => person.id === selectedId) ?? null
-  const kinshipPerson = archive.people.find((person) => person.id === kinshipPersonId && person.id !== selectedId)
+  const kinshipPerson = archive.people.find((person) => person.id === kinshipPersonId)
   const kinshipPath = selected && kinshipPerson
     ? findKinshipPath(archive, selected.id, kinshipPerson.id)
     : null
+  const kinshipRelationship = selected && kinshipPerson
+    ? findKinshipRelationship(archive, selected.id, kinshipPerson.id)
+    : null
+  const kinshipDescription = !kinshipRelationship
+    ? null
+    : kinshipRelationship.type === 'ancestor'
+      ? kinshipRelationship.generations > 5
+        ? t(kinshipRelationship.role === 'ancestor' ? 'kinshipAncestorMany' : 'kinshipDescendantMany', {
+          generations: kinshipRelationship.generations,
+        })
+        : t(kinshipDirectLabels[kinshipRelationship.role][kinshipRelationship.sex])
+      : kinshipRelationship.type === 'sibling'
+        ? t(kinshipSiblingLabels[kinshipRelationship.sex])
+        : kinshipRelationship.type === 'avuncular'
+          ? kinshipRelationship.role === 'uncle'
+            ? t(kinshipRelationship.generations === 1
+              ? kinshipRelationship.sex === 'male' ? 'kinshipUncle' : kinshipRelationship.sex === 'female' ? 'kinshipAunt' : 'kinshipUncleGeneric'
+              : kinshipRelationship.generations === 2
+                ? kinshipRelationship.sex === 'male' ? 'kinshipGreatUncle' : kinshipRelationship.sex === 'female' ? 'kinshipGreatAunt' : 'kinshipGreatUncleGeneric'
+                : 'kinshipUncleMany', { generations: kinshipRelationship.generations })
+            : t(kinshipRelationship.generations === 1
+              ? 'kinshipNieceNephew'
+              : kinshipRelationship.generations === 2
+                ? 'kinshipGreatNieceNephew'
+                : 'kinshipNieceNephewMany', { generations: kinshipRelationship.generations })
+          : kinshipRelationship.type === 'partner'
+            ? t('kinshipPartner')
+            : kinshipRelationship.removed > 0
+              ? t(kinshipRelationship.sex === 'male'
+                ? 'kinshipCousinRemovedMale'
+                : kinshipRelationship.sex === 'female' ? 'kinshipCousinRemovedFemale' : 'kinshipCousinRemoved', {
+                degree: kinshipRelationship.degree,
+                generations: kinshipRelationship.removed,
+              })
+              : kinshipRelationship.degree === 1
+                ? t(kinshipRelationship.sex === 'male' ? 'kinshipFirstCousinMale' : kinshipRelationship.sex === 'female' ? 'kinshipFirstCousinFemale' : 'kinshipFirstCousin')
+                : kinshipRelationship.degree === 2
+                  ? t(kinshipRelationship.sex === 'male' ? 'kinshipSecondCousinMale' : kinshipRelationship.sex === 'female' ? 'kinshipSecondCousinFemale' : 'kinshipSecondCousin')
+                  : kinshipRelationship.degree === 3
+                    ? t(kinshipRelationship.sex === 'male' ? 'kinshipThirdCousinMale' : kinshipRelationship.sex === 'female' ? 'kinshipThirdCousinFemale' : 'kinshipThirdCousin')
+                    : kinshipRelationship.degree === 4
+                      ? t(kinshipRelationship.sex === 'male' ? 'kinshipFourthCousinMale' : kinshipRelationship.sex === 'female' ? 'kinshipFourthCousinFemale' : 'kinshipFourthCousin')
+                      : t(kinshipRelationship.sex === 'male' ? 'kinshipCousinManyMale' : kinshipRelationship.sex === 'female' ? 'kinshipCousinManyFemale' : 'kinshipCousinMany', {
+                        degree: kinshipRelationship.degree,
+                      })
   const upcomingBirthday = selected?.birthDate && !selected.deathDate ? birthdayInfo(selected.birthDate) : null
   const generations = useMemo(() => generationMap(archive), [archive])
   const positions = useMemo(() => treePositions(archive), [archive])
@@ -301,6 +370,7 @@ function App() {
   }
 
   const selectPerson = (id: string) => {
+    setSelectingKinshipPerson(false)
     setSelectedId(id)
   }
 
@@ -312,6 +382,7 @@ function App() {
   }
 
   const editPerson = (person: Person) => {
+    setSelectingKinshipPerson(false)
     setSelectedId(person.id)
     setEditing(person)
     setCroppedPhoto(null)
@@ -420,6 +491,7 @@ function App() {
   const installArchive = (nextArchive: FamilyArchive, key?: string) => {
     setArchive(nextArchive)
     if (key) setPassphrase(key)
+    setSelectingKinshipPerson(false)
     setSelectedId(null)
     setPendingArchive(null)
     setPendingPassphrase('')
@@ -582,6 +654,7 @@ function App() {
       return
     }
     setArchive(next)
+    setSelectingKinshipPerson(false)
     setSelectedId(person.id)
     setCroppedPhoto(null)
     window.setTimeout(() => {
@@ -666,6 +739,7 @@ function App() {
       people: archive.people.filter((person) => person.id !== selected.id),
       relationships: archive.relationships.filter((relationship) => relationship.from !== selected.id && relationship.to !== selected.id),
     })
+    setSelectingKinshipPerson(false)
     setSelectedId(null)
   }
   const beginKeyFlow = (purpose: 'open' | 'save') => {
@@ -913,9 +987,15 @@ function App() {
               {admin && <p className="empty-hint">{t('adminHint')}</p>}
             </div> : <>
               <svg ref={canvasRef} className="tree-canvas" role="group" aria-label={`${t('brand')} — ${archive.people.length} persone`}
+                data-selecting-person={selectingKinshipPerson || undefined}
                 onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}
                 onClick={(event) => {
                   if (event.target !== event.currentTarget || suppressClick.current) return
+                  if (selectingKinshipPerson) {
+                    setSelectingKinshipPerson(false)
+                    return
+                  }
+                  setSelectingKinshipPerson(false)
                   setSelectedId(null)
                 }}>
                 <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
@@ -979,6 +1059,11 @@ function App() {
                         onClick={(event) => {
                           event.stopPropagation()
                           if (suppressClick.current) { suppressClick.current = false; return }
+                          if (selectingKinshipPerson) {
+                            setKinshipPersonId(person.id)
+                            setSelectingKinshipPerson(false)
+                            return
+                          }
                           selectPerson(person.id)
                         }}
                         onKeyDown={(event) => {
@@ -986,6 +1071,11 @@ function App() {
                             event.preventDefault()
                             keyboardNavigationMode.current = true
                             setKeyboardFocusedId(person.id)
+                            if (selectingKinshipPerson) {
+                              setKinshipPersonId(person.id)
+                              setSelectingKinshipPerson(false)
+                              return
+                            }
                             selectPerson(person.id)
                             return
                           }
@@ -1016,9 +1106,9 @@ function App() {
                             .filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null)
                             .sort((a, b) => a.score - b.score)[0]
                           if (!next) return
-                          setSelectedId(next.candidate.id)
                           setKeyboardFocusedId(next.candidate.id)
                           personNodeRefs.current.get(next.candidate.id)?.focus({ preventScroll: true })
+                          if (!selectingKinshipPerson) setSelectedId(next.candidate.id)
                         }}>
                         <rect width="160" height="104" rx="18" />
                         {person.photo ? <TreePhoto key={`${person.id}:${person.photo}`} personId={person.id} source={person.photo} passphrase={passphrase}
@@ -1049,6 +1139,10 @@ function App() {
                   })}
                 </g>
               </svg>
+              {selectingKinshipPerson && <div className="tree-selection-prompt" role="status">
+                <Crosshair size={15} />{t('kinshipSelectPrompt')}
+                <button type="button" onClick={() => setSelectingKinshipPerson(false)}>{t('cancel')}</button>
+              </div>}
               <div className="canvas-hint"><MousePointer2 size={14} /> {t('treeGestureHint')}</div>
               <div className="zoom-controls">
                 <button aria-label={t('zoomIn')} title={t('zoomIn')} onClick={() => setView((v) => ({ ...v, scale: Math.min(2.2, v.scale * 1.15) }))}><Plus size={17} /></button>
@@ -1079,7 +1173,10 @@ function App() {
 
         <aside className={`detail-panel ${selected ? 'has-selection' : ''}`}>
           {selected ? <>
-            <button className="detail-close icon-button" onClick={() => setSelectedId(null)} aria-label={t('close')}><X size={18} /></button>
+            <button className="detail-close icon-button" onClick={() => {
+              setSelectingKinshipPerson(false)
+              setSelectedId(null)
+            }} aria-label={t('close')}><X size={18} /></button>
             <div className="profile-hero">
               <div className="profile-avatar">{selected.photo ? <ProfilePhoto key={`${selected.id}:${selected.photo}`} personId={selected.id}
                 source={selected.photo} passphrase={passphrase} onError={(message) => setNotice(`${t('photoVariantFailure')} ${message}`)} />
@@ -1096,16 +1193,24 @@ function App() {
               {archive.people.length > 1 && <section className="kinship-calculator">
                 <h4>{t('kinshipCalculator')}</h4>
                 <PersonSearchPicker
-                  people={archive.people.filter((person) => person.id !== selected.id)}
+                  people={archive.people}
                   value={kinshipPerson?.id ?? ''}
                   onChange={setKinshipPersonId}
                   label={t('kinshipCompare')}
                   placeholder={t('searchPerson')}
                   noResults={t('noPeopleFound')}
+                  onSelectFromTree={() => setSelectingKinshipPerson((active) => !active)}
+                  selectingFromTree={selectingKinshipPerson}
+                  selectFromTreeLabel={t(selectingKinshipPerson ? 'kinshipCancelTreeSelection' : 'kinshipSelectFromTree')}
                 />
                 {kinshipPerson && (kinshipPath
                   ? <div className="kinship-result" aria-live="polite">
                     <strong>{t('kinshipPath')}</strong>
+                    {kinshipDescription && <p><strong>{t('kinshipRelationshipType')}:</strong> {kinshipDescription}</p>}
+                    {kinshipRelationship && kinshipRelationship.type !== 'partner' &&
+                      <p><strong>{t('kinshipDegree')}:</strong> {t('kinshipDegreeValue', {
+                      degree: kinshipRelationship.civilDegree,
+                    })}</p>}
                     {kinshipPath.steps.length === 0
                       ? <p>{t('kinshipSamePerson')}</p>
                       : <ol>{kinshipPath.steps.map((step, index) => {
@@ -1363,6 +1468,9 @@ interface PersonSearchPickerProps {
   label: string
   placeholder: string
   noResults: string
+  onSelectFromTree?: () => void
+  selectingFromTree?: boolean
+  selectFromTreeLabel?: string
 }
 
 function PersonSearchPicker({
@@ -1372,6 +1480,9 @@ function PersonSearchPicker({
   label,
   placeholder,
   noResults,
+  onSelectFromTree,
+  selectingFromTree = false,
+  selectFromTreeLabel,
 }: PersonSearchPickerProps) {
   const id = useId()
   const [query, setQuery] = useState('')
@@ -1388,45 +1499,55 @@ function PersonSearchPicker({
 
   return <div className="relationship-picker">
     <label htmlFor={id}>{label}</label>
-    <input
-      id={id}
-      role="combobox"
-      aria-autocomplete="list"
-      aria-expanded={open}
-      aria-controls={`${id}-options`}
-      aria-activedescendant={open && options[activeIndex] ? `${id}-option-${activeIndex}` : undefined}
-      aria-required="true"
-      autoComplete="off"
-      value={open ? query : selected ? `${selected.firstName} ${selected.lastName}` : query}
-      placeholder={placeholder}
-      onFocus={() => {
-        setQuery('')
-        setActiveIndex(0)
-        setOpen(true)
-      }}
-      onChange={(event) => {
-        setQuery(event.target.value)
-        onChange('')
-        setActiveIndex(0)
-        setOpen(true)
-      }}
-      onBlur={() => setOpen(false)}
-      onKeyDown={(event) => {
-        if (event.key === 'ArrowDown') {
-          event.preventDefault()
+    <div className="relationship-picker-input-row">
+      <input
+        id={id}
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={open}
+        aria-controls={`${id}-options`}
+        aria-activedescendant={open && options[activeIndex] ? `${id}-option-${activeIndex}` : undefined}
+        aria-required="true"
+        autoComplete="off"
+        value={open ? query : selected ? `${selected.firstName} ${selected.lastName}` : query}
+        placeholder={placeholder}
+        onFocus={() => {
+          setQuery('')
+          setActiveIndex(0)
           setOpen(true)
-          setActiveIndex((index) => Math.max(0, Math.min(index + 1, options.length - 1)))
-        } else if (event.key === 'ArrowUp') {
-          event.preventDefault()
-          setActiveIndex((index) => Math.max(index - 1, 0))
-        } else if (event.key === 'Enter' && open && options[activeIndex]) {
-          event.preventDefault()
-          choose(options[activeIndex]!)
-        } else if (event.key === 'Escape') {
-          setOpen(false)
-        }
-      }}
-    />
+        }}
+        onChange={(event) => {
+          setQuery(event.target.value)
+          onChange('')
+          setActiveIndex(0)
+          setOpen(true)
+        }}
+        onBlur={() => setOpen(false)}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown') {
+            event.preventDefault()
+            setOpen(true)
+            setActiveIndex((index) => Math.max(0, Math.min(index + 1, options.length - 1)))
+          } else if (event.key === 'ArrowUp') {
+            event.preventDefault()
+            setActiveIndex((index) => Math.max(index - 1, 0))
+          } else if (event.key === 'Enter' && open && options[activeIndex]) {
+            event.preventDefault()
+            choose(options[activeIndex]!)
+          } else if (event.key === 'Escape') {
+            setOpen(false)
+          }
+        }}
+      />
+      {onSelectFromTree && <button
+        type="button"
+        className={`icon-button relationship-picker-target ${selectingFromTree ? 'is-active' : ''}`}
+        aria-label={selectFromTreeLabel}
+        aria-pressed={selectingFromTree}
+        title={selectFromTreeLabel}
+        onClick={onSelectFromTree}
+      ><Crosshair size={17} /></button>}
+    </div>
     <input type="hidden" name="person" value={value} />
     {open && <div id={`${id}-options`} className="relationship-picker-options" role="listbox">
       {options.length > 0 ? options.map((person, index) => (

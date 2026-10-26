@@ -28,7 +28,8 @@ Stato verificato per l'implementazione corrente; non sostituisce l'esecuzione de
 - [x] Navigazione spaziale tra i nodi con le frecce e indicatore di focus da tastiera distinto dalla selezione tramite puntatore.
 - [x] Ricaricare le immagini visibili nell'albero dopo aver svuotato la cache delle varianti.
 - [x] Inserire automaticamente i separatori nelle date digitando soltanto le cifre, mantenendo il supporto alle date parziali di solo anno.
-- [x] Calcolo del percorso di parentela registrato dalla scheda persona verso un'altra persona ricercabile.
+- [x] Calcolo del percorso di parentela registrato, della tipologia e del grado consanguineo in linea retta e collaterale, con termini gender-aware e cugini di grado arbitrario; partner esplicito senza inferenze matrimoniali o di affinità.
+- [x] Selezione della persona da confrontare direttamente dall'albero tramite il pulsante mirino accanto alla ricerca di parentela.
 
 ## Da completare
 

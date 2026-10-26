@@ -84,6 +84,34 @@ describe('family tree interface', () => {
     expect(document.activeElement).toBe(zoe)
   })
 
+  it('selects the kinship comparison person directly from the tree', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 404 })))
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Admin' }))
+    fireEvent.change(screen.getByLabelText('Local Admin password'), { target: { value: 'moltisantitree' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    for (const firstName of ['Ada', 'Zoe']) {
+      fireEvent.click(screen.getByRole('button', { name: 'Add person' }))
+      fireEvent.change(screen.getByLabelText('First name'), { target: { value: firstName } })
+      fireEvent.change(screen.getByLabelText('Last name'), { target: { value: 'Family' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    }
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Ada Family' }))
+    expect(screen.getByRole('heading', { name: 'Ada Family' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Select a person from the tree' }))
+    expect(screen.getByRole('status')).toHaveTextContent('Select a person in the tree to compare.')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Zoe Family' }))
+
+    expect(screen.getByRole('combobox', { name: 'Compare with' })).toHaveValue('Zoe Family')
+    expect(screen.getByRole('heading', { name: 'Ada Family' })).toBeInTheDocument()
+    expect(screen.queryByText('Select a person in the tree to compare.')).not.toBeInTheDocument()
+  })
+
   it('fetches the published archive without reusing a stale cached copy', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 404 }))
     vi.stubGlobal('fetch', fetchMock)
@@ -203,6 +231,12 @@ describe('family tree interface', () => {
     fireEvent.click(screen.getByRole('option', { name: 'Child Family' }))
 
     expect(screen.getByText('Recorded relationship path')).toBeInTheDocument()
+    expect(screen.getByText(/Relationship type:/)).toBeInTheDocument()
+    const kinshipResult = document.querySelector<HTMLElement>('.kinship-result')
+    if (!kinshipResult) throw new Error('The kinship result is not available.')
+    expect(within(kinshipResult).getByText('Parent', { exact: true })).toBeInTheDocument()
+    expect(screen.getByText(/Degree of kinship:/)).toBeInTheDocument()
+    expect(screen.getByText('Degree 1')).toBeInTheDocument()
     expect(screen.getByText('Child', { selector: 'span' })).toBeInTheDocument()
     expect(screen.getByText('Parent-child links: 1')).toBeInTheDocument()
   })
