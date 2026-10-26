@@ -1,4 +1,4 @@
-import type { FamilyArchive, Person } from './model'
+import { isUnionRelationship, unionDetails, type FamilyArchive, type Person, type Relationship } from './model'
 
 const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
 
@@ -42,7 +42,12 @@ export function toGedcom(
   const individualRefs = new Map(archive.people.map((person, index) => [person.id, `@I${index + 1}@`]))
   const peopleById = new Map(archive.people.map((person) => [person.id, person]))
   const parentIdsByChild = new Map<string, string[]>()
-  const familyGroups = new Map<string, { ref: string; memberIds: string[]; childIds: string[] }>()
+  const familyGroups = new Map<string, {
+    ref: string
+    memberIds: string[]
+    childIds: string[]
+    unionRelationships: Relationship[]
+  }>()
   const getFamily = (memberIds: string[]) => {
     const members = [...new Set(memberIds)].sort()
     const key = JSON.stringify(members)
@@ -50,6 +55,7 @@ export function toGedcom(
       ref: `@F${familyGroups.size + 1}@`,
       memberIds: members,
       childIds: [],
+      unionRelationships: [],
     }
     familyGroups.set(key, family)
     return family
@@ -62,7 +68,9 @@ export function toGedcom(
         relationship.from,
       ])
     }
-    if (relationship.type === 'partner') getFamily([relationship.from, relationship.to])
+    if (isUnionRelationship(relationship)) {
+      getFamily([relationship.from, relationship.to]).unionRelationships.push(relationship)
+    }
   }
 
   for (const person of archive.people) {
@@ -139,6 +147,22 @@ export function toGedcom(
     lines.push(`0 ${family.ref} FAM`)
     if (family.memberIds[0]) lines.push(`1 HUSB ${individualRefs.get(family.memberIds[0])!}`)
     if (family.memberIds[1]) lines.push(`1 WIFE ${individualRefs.get(family.memberIds[1])!}`)
+    for (const relationship of family.unionRelationships) {
+      const union = unionDetails(relationship)
+      if (!union) continue
+      if (union.kind === 'marriage') {
+        lines.push('1 MARR')
+        if (union.status === 'ended' && union.endReason === 'divorce') lines.push('1 DIV')
+        if (union.status === 'ended' && union.endReason === 'annulment') lines.push('1 ANUL')
+      } else {
+        lines.push('1 EVEN')
+        lines.push('2 TYPE PARTNERSHIP')
+      }
+      lines.push('1 _UNION')
+      lines.push(`2 _TYPE ${union.kind.toUpperCase()}`)
+      lines.push(`2 _STATUS ${union.status.toUpperCase()}`)
+      if (union.endReason) lines.push(`2 _ENDREASON ${union.endReason.toUpperCase()}`)
+    }
     for (const additionalParentId of family.memberIds.slice(2)) {
       lines.push(`1 ASSO ${individualRefs.get(additionalParentId)!}`)
       lines.push('2 ROLE PARENT')

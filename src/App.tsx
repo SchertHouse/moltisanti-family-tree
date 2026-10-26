@@ -24,7 +24,8 @@ import {
 } from './kinship'
 import {
   birthdayInfo, emptyArchive, generationMap, isSexAtBirth, relationTo, treePositions, validateArchive,
-  uniquePeople, type FamilyArchive, type Person, type Relationship, type RelationshipType,
+  isUnionRelationship, uniquePeople, unionDetails, type FamilyArchive, type Person, type Relationship,
+  type RelationshipType, type UnionEndReason, type UnionKind, type UnionStatus,
 } from './model'
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'moltisantitree'
@@ -56,6 +57,11 @@ const kinshipSiblingLabels: Record<KinshipSex, TranslationKey> = {
   unspecified: 'kinshipSibling',
 }
 
+function unionLabelKey(kind: UnionKind, status: UnionStatus): TranslationKey {
+  if (kind === 'marriage') return status === 'current' ? 'marriageCurrent' : 'marriageEnded'
+  return status === 'current' ? 'partnershipCurrent' : 'partnershipEnded'
+}
+
 function App() {
   const [language, setLanguage] = useState<Language>(browserLanguage)
   const languageRef = useRef(language)
@@ -77,6 +83,9 @@ function App() {
   const [pendingPassphrase, setPendingPassphrase] = useState('')
   const [editing, setEditing] = useState<Person | null>(null)
   const [relationshipPersonId, setRelationshipPersonId] = useState('')
+  const [relationshipType, setRelationshipType] = useState<RelationshipType>('parent-child')
+  const [unionKind, setUnionKind] = useState<UnionKind>('marriage')
+  const [unionStatus, setUnionStatus] = useState<UnionStatus>('current')
   const [cropFile, setCropFile] = useState<File | null>(null)
   const [croppedPhoto, setCroppedPhoto] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -154,6 +163,8 @@ function App() {
     : null
   const kinshipDescription = !kinshipRelationship
     ? null
+    : kinshipRelationship.type === 'union'
+      ? t(unionLabelKey(kinshipRelationship.kind, kinshipRelationship.status))
     : kinshipRelationship.type === 'ancestor'
       ? kinshipRelationship.generations > 5
         ? t(kinshipRelationship.role === 'ancestor' ? 'kinshipAncestorMany' : 'kinshipDescendantMany', {
@@ -174,9 +185,7 @@ function App() {
               : kinshipRelationship.generations === 2
                 ? 'kinshipGreatNieceNephew'
                 : 'kinshipNieceNephewMany', { generations: kinshipRelationship.generations })
-          : kinshipRelationship.type === 'partner'
-            ? t('kinshipPartner')
-            : kinshipRelationship.removed > 0
+          : kinshipRelationship.removed > 0
               ? t(kinshipRelationship.sex === 'male'
                 ? 'kinshipCousinRemovedMale'
                 : kinshipRelationship.sex === 'female' ? 'kinshipCousinRemovedFemale' : 'kinshipCousinRemoved', {
@@ -226,7 +235,9 @@ function App() {
   }, [archive])
 
   const relationshipEntries = (personId: string, type: RelationshipType, direction?: 'in' | 'out') => archive.relationships
-    .filter((relationship) => relationship.type === type &&
+    .filter((relationship) => (type === 'union'
+      ? isUnionRelationship(relationship)
+      : relationship.type === type) &&
       (direction === 'in' ? relationship.to === personId : direction === 'out'
         ? relationship.from === personId
         : relationship.from === personId || relationship.to === personId))
@@ -719,7 +730,13 @@ function App() {
       return
     }
     try {
-      setArchive(relationTo(archive, selected.id, data.get('type') as RelationshipType, otherPersonId))
+      const type = String(data.get('type')) as RelationshipType
+      const endReason = String(data.get('unionEndReason') ?? '') as UnionEndReason | ''
+      setArchive(relationTo(archive, selected.id, type, otherPersonId, type === 'union' ? {
+        kind: String(data.get('unionKind')) as UnionKind,
+        status: String(data.get('unionStatus')) as UnionStatus,
+        ...(endReason ? { endReason } : {}),
+      } : undefined))
       setModal(null)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : t('error'))
@@ -895,6 +912,11 @@ function App() {
         <button className="relative-person" onClick={() => selectPerson(person.id)}>
           <span className="mini-avatar">{person.firstName.slice(0, 1)}{person.lastName.slice(0, 1)}</span>
           {person.firstName} {person.lastName}
+          {relationship && isUnionRelationship(relationship) && (() => {
+            const details = unionDetails(relationship)
+            if (!details) return null
+            return <small className="union-label">{t(unionLabelKey(details.kind, details.status))}</small>
+          })()}
         </button>
         {admin && relationship && <button className="remove-relationship icon-button"
           aria-label={t('removeRelationship', { name: `${person.firstName} ${person.lastName}` })}
@@ -1022,7 +1044,7 @@ function App() {
                     return <path key={key} className="family-line"
                       d={`${parentBranches} ${parentsBus} ${familyTrunk} ${childrenBus} ${childBranches}`} />
                   })}
-                  {archive.relationships.filter((relationship) => relationship.type === 'partner').map((relationship) => {
+                  {archive.relationships.filter(isUnionRelationship).map((relationship) => {
                     const from = positions.get(relationship.from)
                     const to = positions.get(relationship.to)
                     if (!from || !to || !filtered.some((p) => p.id === relationship.from) || !filtered.some((p) => p.id === relationship.to)) return null
@@ -1030,7 +1052,8 @@ function App() {
                     const path = from.y === to.y
                       ? `M ${from.x + direction * 80} ${from.y} L ${to.x - direction * 80} ${to.y}`
                       : `M ${from.x + direction * 80} ${from.y} C ${from.x + direction * 105} ${from.y - 15}, ${to.x - direction * 105} ${to.y - 15}, ${to.x - direction * 80} ${to.y}`
-                    return <g key={relationship.id}>
+                    const union = unionDetails(relationship)
+                    return <g key={relationship.id} className={union?.status === 'ended' ? 'ended-union' : ''}>
                       <path className="partner-line" d={path} />
                       <Heart className="partner-heart" x={(from.x + to.x) / 2 - 6} y={(from.y + to.y) / 2 - 6} size={12} />
                     </g>
@@ -1207,7 +1230,7 @@ function App() {
                   ? <div className="kinship-result" aria-live="polite">
                     <strong>{t('kinshipPath')}</strong>
                     {kinshipDescription && <p><strong>{t('kinshipRelationshipType')}:</strong> {kinshipDescription}</p>}
-                    {kinshipRelationship && kinshipRelationship.type !== 'partner' &&
+                    {kinshipRelationship && kinshipRelationship.type !== 'union' &&
                       <p><strong>{t('kinshipDegree')}:</strong> {t('kinshipDegreeValue', {
                       degree: kinshipRelationship.civilDegree,
                     })}</p>}
@@ -1231,11 +1254,11 @@ function App() {
               </section>}
               {familyList(t('parents'), relationshipEntries(selected.id, 'parent-child', 'in'))}
               {familyList(t('children'), relationshipEntries(selected.id, 'parent-child', 'out'))}
-              {familyList(t('partners'), relationshipEntries(selected.id, 'partner'))}
+              {familyList(t('partners'), relationshipEntries(selected.id, 'union'))}
               {familyList(t('siblings'), uniquePeople(relationships(selected.id, 'parent-child', 'in').flatMap((parent) =>
                 relationships(parent.id, 'parent-child', 'out').filter((child) => child.id !== selected.id))
               ).map((person) => ({ person })))}
-              {relationships(selected.id, 'parent-child').length === 0 && relationships(selected.id, 'partner').length === 0 &&
+              {relationships(selected.id, 'parent-child').length === 0 && relationshipEntries(selected.id, 'union').length === 0 &&
                 <p className="muted-copy">{t('noFamilyConnections')}</p>}
             </section>
             {upcomingBirthday && <div className="birthday-card"><span className="birthday-icon">🎂</span>
@@ -1264,6 +1287,9 @@ function App() {
               {admin && <div className="admin-tools"><button className="button button-danger" onClick={removeSelected}>{t('remove')}</button>
                 {archive.people.length > 1 && <button className="button button-light" onClick={() => {
                   setRelationshipPersonId('')
+                  setRelationshipType('parent-child')
+                  setUnionKind('marriage')
+                  setUnionStatus('current')
                   setModal('relationship')
                 }}><Users size={15} />{t('relationship')}</button>}
               </div>}
@@ -1407,7 +1433,31 @@ function App() {
             </form></>}
           {modal === 'relationship' && selected && <><div className="modal-symbol"><Users size={23} /></div><h2 id="modal-title">{t('relationship')}</h2>
             <form className="form-stack" onSubmit={onAddRelationship}>
-              <label>{t('relationshipType')}<select name="type"><option value="parent-child">{t('parentChild')}</option><option value="partner">{t('partner')}</option></select></label>
+              <label>{t('relationshipType')}<select name="type" value={relationshipType}
+                onChange={(event) => setRelationshipType(event.target.value as RelationshipType)}>
+                <option value="parent-child">{t('parentChild')}</option>
+                <option value="union">{t('union')}</option>
+              </select></label>
+              {relationshipType === 'union' && <>
+                <label>{t('unionKind')}<select name="unionKind" value={unionKind}
+                  onChange={(event) => setUnionKind(event.target.value as UnionKind)}>
+                  <option value="marriage">{t('marriage')}</option>
+                  <option value="partnership">{t('partnership')}</option>
+                </select></label>
+                <label>{t('unionStatus')}<select name="unionStatus" value={unionStatus}
+                  onChange={(event) => setUnionStatus(event.target.value as UnionStatus)}>
+                  <option value="current">{t('unionCurrent')}</option>
+                  <option value="ended">{t('unionEnded')}</option>
+                </select></label>
+                {unionStatus === 'ended' && <label>{t('unionEndReason')}<select name="unionEndReason" defaultValue="">
+                  <option value="">{t('notSpecified')}</option>
+                  <option value="divorce">{t('unionReasonDivorce')}</option>
+                  <option value="annulment">{t('unionReasonAnnulment')}</option>
+                  <option value="separation">{t('unionReasonSeparation')}</option>
+                  <option value="death">{t('unionReasonDeath')}</option>
+                  <option value="other">{t('unionReasonOther')}</option>
+                </select></label>}
+              </>}
               <PersonSearchPicker
                 people={archive.people.filter((person) => person.id !== selected.id)}
                 value={relationshipPersonId}
@@ -1416,7 +1466,7 @@ function App() {
                 placeholder={t('searchPerson')}
                 noResults={t('noPeopleFound')}
               />
-              <p className="form-note">{t('parentRelationshipHint')}</p>
+              {relationshipType === 'parent-child' && <p className="form-note">{t('parentRelationshipHint')}</p>}
               <div className="modal-actions"><button type="button" className="button button-light" onClick={() => setModal(null)}>{t('cancel')}</button><button className="button button-primary">{t('confirm')}</button></div>
             </form></>}
           {modal === 'publish' && <><div className="modal-symbol"><Upload size={23} /></div><h2 id="modal-title">{t('publish')}</h2>

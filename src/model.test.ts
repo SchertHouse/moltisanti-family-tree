@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { birthdayInfo, emptyArchive, generationMap, treePositions, uniquePeople, validateArchive } from './model'
+import { birthdayInfo, emptyArchive, generationMap, relationTo, treePositions, uniquePeople, validateArchive } from './model'
 
 describe('family archive validation', () => {
   it('deduplicates people by ID and preserves their first-seen order', () => {
@@ -63,6 +63,47 @@ describe('family archive validation', () => {
       relationships: [],
     })).toThrow(/sesso alla nascita/)
   })
+
+  it('validates marriage and partnership details while accepting legacy partners', () => {
+    const people = [
+      { id: 'a', firstName: 'Ada', lastName: 'Family' },
+      { id: 'b', firstName: 'Bea', lastName: 'Family' },
+    ]
+    expect(() => validateArchive({
+      schemaVersion: 1,
+      people,
+      relationships: [
+        { id: 'legacy', type: 'partner', from: 'a', to: 'b' },
+        { id: 'marriage', type: 'union', from: 'a', to: 'b', unionKind: 'marriage', unionStatus: 'ended', unionEndReason: 'divorce' },
+      ],
+    })).not.toThrow()
+    expect(() => validateArchive({
+      schemaVersion: 1,
+      people,
+      relationships: [
+        { id: 'invalid', type: 'union', from: 'a', to: 'b', unionKind: 'marriage', unionStatus: 'current', unionEndReason: 'divorce' },
+      ],
+    })).toThrow(/motivo di conclusione/)
+  })
+
+  it('allows distinct union history and parent-child links for the same pair', () => {
+    const archive = emptyArchive()
+    archive.people = [
+      { id: 'parent', firstName: 'Ada', lastName: 'Family' },
+      { id: 'child', firstName: 'Bea', lastName: 'Family' },
+    ]
+
+    const union = { kind: 'marriage' as const, status: 'current' as const }
+    const withUnion = relationTo(archive, 'parent', 'union', 'child', union)
+    expect(() => relationTo(withUnion, 'parent', 'union', 'child', union)).toThrow(/già presente/)
+    expect(() => relationTo(withUnion, 'child', 'union', 'parent', union)).toThrow(/già presente/)
+    expect(relationTo(withUnion, 'parent', 'parent-child', 'child').relationships).toHaveLength(2)
+    expect(relationTo(withUnion, 'parent', 'union', 'child', {
+      kind: 'marriage',
+      status: 'ended',
+      endReason: 'divorce',
+    }).relationships).toHaveLength(2)
+  })
 })
 
 describe('birthday dates', () => {
@@ -109,6 +150,28 @@ describe('family tree layout', () => {
     archive.relationships = [
       { id: 'parent-child', type: 'parent-child', from: 'ancestor', to: 'descendant' },
       { id: 'partner', type: 'partner', from: 'ancestor', to: 'descendant' },
+    ]
+
+    const levels = generationMap(archive)
+    expect(levels.get('descendant')).toBe(levels.get('ancestor')! + 1)
+  })
+
+  it('does not align ended unions in the tree layout', () => {
+    const archive = emptyArchive()
+    archive.people = [
+      { id: 'ancestor', firstName: 'Ada', lastName: 'Family' },
+      { id: 'descendant', firstName: 'Bea', lastName: 'Family' },
+    ]
+    archive.relationships = [
+      { id: 'parent-child', type: 'parent-child', from: 'ancestor', to: 'descendant' },
+      {
+        id: 'ended-union',
+        type: 'union',
+        from: 'ancestor',
+        to: 'descendant',
+        unionKind: 'marriage',
+        unionStatus: 'ended',
+      },
     ]
 
     const levels = generationMap(archive)

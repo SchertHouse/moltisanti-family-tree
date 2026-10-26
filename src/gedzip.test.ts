@@ -43,4 +43,29 @@ describe('GEDZIP export', () => {
 
     await expect(createGedzip(archive, '')).rejects.toThrow(/passphrase/)
   })
+
+  it('preserves union details in the GEDCOM file inside the package', async () => {
+    const archive: FamilyArchive = {
+      schemaVersion: 1,
+      people: [
+        { id: 'person-a', firstName: 'Ada', lastName: 'Family' },
+        { id: 'person-b', firstName: 'Bea', lastName: 'Family' },
+      ],
+      relationships: [{
+        id: 'union',
+        type: 'union',
+        from: 'person-a',
+        to: 'person-b',
+        unionKind: 'partnership',
+        unionStatus: 'ended',
+        unionEndReason: 'separation',
+      }],
+    }
+
+    const zip = unzipSync(await createGedzip(archive, ''))
+    const gedcom = new TextDecoder().decode(zip['gedcom.ged'])
+
+    expect(gedcom).toContain('2 VERS 7.0')
+    expect(gedcom).toContain('2 TYPE PARTNERSHIP\r\n1 _UNION\r\n2 _TYPE PARTNERSHIP\r\n2 _STATUS ENDED\r\n2 _ENDREASON SEPARATION')
+  })
 })

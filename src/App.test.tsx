@@ -72,16 +72,24 @@ describe('family tree interface', () => {
     }
 
     const ada = await screen.findByRole('button', { name: 'Ada Family' })
-    fireEvent.pointerDown(ada, { pointerId: 1, pointerType: 'mouse', button: 0 })
-    fireEvent.click(ada)
-    expect(ada).not.toHaveClass('keyboard-focused')
-
-    fireEvent.keyDown(ada, { key: 'ArrowRight' })
-
     const zoe = screen.getByRole('button', { name: 'Zoe Family' })
-    expect(zoe).toHaveAttribute('aria-pressed', 'true')
-    expect(zoe).toHaveClass('keyboard-focused')
-    expect(document.activeElement).toBe(zoe)
+    const getNodeX = (node: HTMLElement) => {
+      const transform = node.parentElement?.getAttribute('transform')
+      const match = transform && /^translate\(([-\d.]+) /.exec(transform)
+      if (!match) throw new Error('The person node position is unavailable.')
+      return Number(match[1])
+    }
+    const left = getNodeX(ada) < getNodeX(zoe) ? ada : zoe
+    const right = left === ada ? zoe : ada
+    fireEvent.pointerDown(left, { pointerId: 1, pointerType: 'mouse', button: 0 })
+    fireEvent.click(left)
+    expect(left).not.toHaveClass('keyboard-focused')
+
+    fireEvent.keyDown(left, { key: 'ArrowRight' })
+
+    expect(right).toHaveAttribute('aria-pressed', 'true')
+    expect(right).toHaveClass('keyboard-focused')
+    expect(document.activeElement).toBe(right)
   })
 
   it('selects the kinship comparison person directly from the tree', async () => {
@@ -455,6 +463,34 @@ describe('family tree interface', () => {
     expect(screen.queryByRole('button', { name: 'Remove connection with Child Family' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Parent Family' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Child Family' })).toBeInTheDocument()
+  })
+
+  it('lets an admin record and distinguish a concluded marriage', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 404 })))
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Admin' }))
+    fireEvent.change(screen.getByLabelText('Local Admin password'), { target: { value: 'moltisantitree' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+    for (const firstName of ['Ada', 'Bea']) {
+      fireEvent.click(screen.getByRole('button', { name: 'Add person' }))
+      fireEvent.change(screen.getByLabelText('First name'), { target: { value: firstName } })
+      fireEvent.change(screen.getByLabelText('Last name'), { target: { value: 'Family' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    }
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ada Family' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add a connection' }))
+    fireEvent.change(screen.getByLabelText('Relationship type'), { target: { value: 'union' } })
+    fireEvent.change(screen.getByLabelText('Union type'), { target: { value: 'marriage' } })
+    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'ended' } })
+    fireEvent.change(screen.getByLabelText('Reason it ended'), { target: { value: 'divorce' } })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Person' }), { target: { value: 'Bea' } })
+    fireEvent.click(screen.getByRole('option', { name: 'Bea Family' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    expect(await screen.findByText('Ended marriage')).toBeInTheDocument()
   })
 
   it('lets an admin create and inspect a person without persisting the archive', async () => {

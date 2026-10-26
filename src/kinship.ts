@@ -1,4 +1,4 @@
-import type { FamilyArchive } from './model'
+import { isUnionRelationship, unionDetails, type FamilyArchive } from './model'
 
 export type KinshipStepType = 'parent' | 'child' | 'partner'
 
@@ -33,7 +33,7 @@ export type KinshipRelationship =
   | { type: 'sibling'; civilDegree: number; sex: KinshipSex }
   | { type: 'avuncular'; role: 'uncle' | 'niece'; generations: number; civilDegree: number; sex: KinshipSex }
   | { type: 'cousin'; degree: number; removed: number; civilDegree: number; sex: KinshipSex }
-  | { type: 'partner' }
+  | { type: 'union'; kind: 'marriage' | 'partnership'; status: 'current' | 'ended'; endReason?: string }
 
 export function findKinshipRelationship(
   archive: FamilyArchive,
@@ -47,9 +47,12 @@ export function findKinshipRelationship(
   const sex: KinshipSex = selected.sexAtBirth === 'M'
     ? 'male'
     : selected.sexAtBirth === 'F' ? 'female' : 'unspecified'
-  const isPartner = archive.relationships.some((relationship) => relationship.type === 'partner' &&
+  const directUnions = archive.relationships.filter((relationship) => isUnionRelationship(relationship) &&
     ((relationship.from === fromId && relationship.to === toId) ||
       (relationship.from === toId && relationship.to === fromId)))
+  const directUnion = directUnions.find((relationship) => unionDetails(relationship)?.status === 'current') ??
+    directUnions.at(-1)
+  const directUnionDetails = directUnion ? unionDetails(directUnion) : null
 
   const parentsByChild = new Map<string, string[]>()
   for (const relationship of archive.relationships) {
@@ -90,7 +93,7 @@ export function findKinshipRelationship(
       left.ancestorId.localeCompare(right.ancestorId))
 
   const closest = commonAncestors[0]
-  if (!closest) return isPartner ? { type: 'partner' } : null
+  if (!closest) return directUnionDetails ? { type: 'union', ...directUnionDetails } : null
   const civilDegree = closest.fromGenerations + closest.toGenerations
   if (closest.fromGenerations === 0 || closest.toGenerations === 0) {
     const selectedIsAncestor = closest.fromGenerations === 0
@@ -152,7 +155,7 @@ export function findKinshipPath(
     if (relationship.type === 'parent-child') {
       connect(relationship.from, relationship.to, 'child')
       connect(relationship.to, relationship.from, 'parent')
-    } else {
+    } else if (isUnionRelationship(relationship)) {
       connect(relationship.from, relationship.to, 'partner')
       connect(relationship.to, relationship.from, 'partner')
     }

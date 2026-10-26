@@ -22,13 +22,14 @@ Stato verificato per l'implementazione corrente; non sostituisce l'esecuzione de
 - [x] Ricerca dei fratelli/sorelle deduplicata per ID persona, mantenendo l'ordine di prima apparizione.
 - [x] Rimozione amministrativa dei singoli legami familiari con conferma, senza eliminare le persone coinvolte.
 - [x] Campi opzionali persona per nome alternativo, sesso alla nascita, professione, residenza e nazionalità, inclusa esportazione GEDCOM/GEDZIP.
+- [x] Unioni distinte tra matrimonio e partnership, attuali o concluse con motivo facoltativo; retrocompatibilità dei legami `partner` preesistenti e mapping GEDCOM/GEDZIP con metadati `_UNION`.
 - [x] Deselezione tramite tocco/click sullo sfondo dell'albero e scroll della scheda di dettaglio in landscape con dettagli laterali.
 - [x] Etichetta compatta per la data di morte, senza indicazione ridondante dell'opzionalità.
 - [x] Conservare pan e zoom correnti quando si deseleziona una persona toccando lo sfondo dell'albero.
 - [x] Navigazione spaziale tra i nodi con le frecce e indicatore di focus da tastiera distinto dalla selezione tramite puntatore.
 - [x] Ricaricare le immagini visibili nell'albero dopo aver svuotato la cache delle varianti.
 - [x] Inserire automaticamente i separatori nelle date digitando soltanto le cifre, mantenendo il supporto alle date parziali di solo anno.
-- [x] Calcolo del percorso di parentela registrato, della tipologia e del grado consanguineo in linea retta e collaterale, con termini gender-aware e cugini di grado arbitrario; partner esplicito senza inferenze matrimoniali o di affinità.
+- [x] Calcolo del percorso di parentela registrato, della tipologia e del grado consanguineo in linea retta e collaterale, con termini gender-aware e cugini di grado arbitrario; tipo e stato delle unioni espliciti, senza dedurre affinità non registrate.
 - [x] Selezione della persona da confrontare direttamente dall'albero tramite il pulsante mirino accanto alla ricerca di parentela.
 
 ## Da completare

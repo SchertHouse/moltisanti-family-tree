@@ -188,13 +188,77 @@ describe('kinship paths', () => {
       })
     })
 
-    it('reports an explicit partner connection without assigning a consanguinity degree', () => {
+    it('reports legacy partners as current partnerships without assigning a consanguinity degree', () => {
       const family: FamilyArchive = {
         schemaVersion: 1,
         people: people(['person-a', 'person-b']),
         relationships: [{ id: '1', type: 'partner', from: 'person-a', to: 'person-b' }],
       }
-      expect(findKinshipRelationship(family, 'person-a', 'person-b')).toEqual({ type: 'partner' })
+      expect(findKinshipRelationship(family, 'person-a', 'person-b')).toEqual({
+        type: 'union',
+        kind: 'partnership',
+        status: 'current',
+      })
+    })
+
+    it('reports a concluded marriage without assigning a consanguinity degree', () => {
+      const family: FamilyArchive = {
+        schemaVersion: 1,
+        people: people(['person-a', 'person-b']),
+        relationships: [{
+          id: '1',
+          type: 'union',
+          from: 'person-a',
+          to: 'person-b',
+          unionKind: 'marriage',
+          unionStatus: 'ended',
+          unionEndReason: 'divorce',
+        }],
+      }
+
+      expect(findKinshipRelationship(family, 'person-a', 'person-b')).toEqual({
+        type: 'union',
+        kind: 'marriage',
+        status: 'ended',
+        endReason: 'divorce',
+      })
+      expect(findKinshipPath(family, 'person-a', 'person-b')).toEqual({
+        steps: [{ personId: 'person-b', type: 'partner' }],
+        bloodSteps: 0,
+        partnerSteps: 1,
+      })
+    })
+
+    it('prefers a current union when a former union is also recorded for the pair', () => {
+      const family: FamilyArchive = {
+        schemaVersion: 1,
+        people: people(['person-a', 'person-b']),
+        relationships: [
+          {
+            id: 'former-marriage',
+            type: 'union',
+            from: 'person-a',
+            to: 'person-b',
+            unionKind: 'marriage',
+            unionStatus: 'ended',
+            unionEndReason: 'divorce',
+          },
+          {
+            id: 'current-partnership',
+            type: 'union',
+            from: 'person-a',
+            to: 'person-b',
+            unionKind: 'partnership',
+            unionStatus: 'current',
+          },
+        ],
+      }
+
+      expect(findKinshipRelationship(family, 'person-a', 'person-b')).toEqual({
+        type: 'union',
+        kind: 'partnership',
+        status: 'current',
+      })
     })
 
     it('uses recorded sex to distinguish gendered direct-line and collateral terms', () => {

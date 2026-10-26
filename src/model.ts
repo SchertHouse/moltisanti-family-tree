@@ -1,4 +1,7 @@
-export type RelationshipType = 'parent-child' | 'partner'
+export type RelationshipType = 'parent-child' | 'partner' | 'union'
+export type UnionKind = 'marriage' | 'partnership'
+export type UnionStatus = 'current' | 'ended'
+export type UnionEndReason = 'divorce' | 'annulment' | 'separation' | 'death' | 'other'
 export type SexAtBirth = 'M' | 'F' | 'X' | 'U'
 
 export function isSexAtBirth(value: unknown): value is SexAtBirth {
@@ -35,6 +38,28 @@ export interface Relationship {
   type: RelationshipType
   from: string
   to: string
+  unionKind?: UnionKind
+  unionStatus?: UnionStatus
+  unionEndReason?: UnionEndReason
+}
+
+export function isUnionRelationship(relationship: Relationship): boolean {
+  return relationship.type === 'partner' || relationship.type === 'union'
+}
+
+export function unionDetails(relationship: Relationship): {
+  kind: UnionKind
+  status: UnionStatus
+  endReason?: UnionEndReason
+} | null {
+  if (!isUnionRelationship(relationship)) return null
+  return {
+    kind: relationship.type === 'partner' ? 'partnership' : relationship.unionKind!,
+    status: relationship.type === 'partner' ? 'current' : relationship.unionStatus!,
+    ...(relationship.type === 'union' && relationship.unionEndReason
+      ? { endReason: relationship.unionEndReason }
+      : {}),
+  }
 }
 
 export interface FamilyArchive {
@@ -103,10 +128,24 @@ export function validateArchive(value: unknown): asserts value is FamilyArchive 
     if (!relationship || typeof relationship !== 'object' || typeof relationship.id !== 'string' || !relationship.id || relationshipIds.has(relationship.id)) {
       throw new Error('ID relazione mancante o duplicato.')
     }
-    if (!['parent-child', 'partner'].includes(relationship.type) || !ids.has(relationship.from) || !ids.has(relationship.to)) {
+    if (!['parent-child', 'partner', 'union'].includes(relationship.type) || !ids.has(relationship.from) || !ids.has(relationship.to)) {
       throw new Error('La relazione contiene persone inesistenti o un tipo non valido.')
     }
     if (relationship.from === relationship.to) throw new Error('Una persona non può essere collegata a sé stessa.')
+    if (relationship.type === 'union') {
+      if (!['marriage', 'partnership'].includes(relationship.unionKind ?? '') ||
+        !['current', 'ended'].includes(relationship.unionStatus ?? '') ||
+        (relationship.unionEndReason !== undefined &&
+          !['divorce', 'annulment', 'separation', 'death', 'other'].includes(relationship.unionEndReason))) {
+        throw new Error('I dettagli dell’unione non sono validi.')
+      }
+      if (relationship.unionStatus === 'current' && relationship.unionEndReason !== undefined) {
+        throw new Error('Un’unione attuale non può avere un motivo di conclusione.')
+      }
+    } else if (relationship.unionKind !== undefined || relationship.unionStatus !== undefined ||
+      relationship.unionEndReason !== undefined) {
+      throw new Error('I dettagli dell’unione sono consentiti solo per una relazione di unione.')
+    }
     relationshipIds.add(relationship.id)
   }
   const parents = new Map<string, string[]>()
@@ -127,15 +166,45 @@ export function validateArchive(value: unknown): asserts value is FamilyArchive 
   for (const id of ids) if (hasCycle(id)) throw new Error('Le relazioni genitoriali contengono un ciclo.')
 }
 
-export function relationTo(archive: FamilyArchive, personId: string, type: RelationshipType, otherId: string): FamilyArchive {
-  const exists = archive.relationships.some((r) =>
-    r.type === type && (type === 'partner'
-      ? (r.from === personId && r.to === otherId) || (r.from === otherId && r.to === personId)
-      : r.from === personId && r.to === otherId))
+export function relationTo(
+  archive: FamilyArchive,
+  personId: string,
+  type: RelationshipType,
+  otherId: string,
+  union?: { kind: UnionKind; status: UnionStatus; endReason?: UnionEndReason },
+): FamilyArchive {
+  const isUnionRequest = type === 'union' || type === 'partner'
+  const samePair = (relationship: Relationship) => isUnionRequest
+    ? isUnionRelationship(relationship) &&
+      ((relationship.from === personId && relationship.to === otherId) ||
+        (relationship.from === otherId && relationship.to === personId))
+    : relationship.type === type && relationship.from === personId && relationship.to === otherId
+  const exists = archive.relationships.some((relationship) => {
+    if (!samePair(relationship)) return false
+    if (!isUnionRequest) return true
+    const details = unionDetails(relationship)
+    if (!details) return false
+    const requestedKind = type === 'partner' ? 'partnership' : union?.kind
+    const requestedStatus = type === 'partner' ? 'current' : union?.status
+    return details.kind === requestedKind && details.status === requestedStatus &&
+      (details.status === 'ended' ? details.endReason === union?.endReason : true)
+  })
   if (exists) throw new Error('Questa relazione è già presente.')
+  if (type === 'union' && !union) throw new Error('Specificare tipo e stato dell’unione.')
+  const relationship: Relationship = {
+    id: crypto.randomUUID(),
+    type,
+    from: personId,
+    to: otherId,
+    ...(type === 'union' && union ? {
+      unionKind: union.kind,
+      unionStatus: union.status,
+      ...(union.endReason ? { unionEndReason: union.endReason } : {}),
+    } : {}),
+  }
   const next = {
     ...archive,
-    relationships: [...archive.relationships, { id: crypto.randomUUID(), type, from: personId, to: otherId }],
+    relationships: [...archive.relationships, relationship],
   }
   validateArchive(next)
   return next
@@ -316,7 +385,10 @@ function partnerGroups(archive: FamilyArchive): PartnerGroups {
     return parent.get(personId)!
   }
   const parentChild = archive.relationships.filter((relationship) => relationship.type === 'parent-child')
-  const partners = archive.relationships.filter((relationship) => relationship.type === 'partner')
+  const partners = archive.relationships.filter((relationship) => {
+    if (!isUnionRelationship(relationship)) return false
+    return unionDetails(relationship)?.status === 'current'
+  })
     .sort((a, b) => {
       const aKey = [a.from, a.to].sort().join('\u0000')
       const bKey = [b.from, b.to].sort().join('\u0000')

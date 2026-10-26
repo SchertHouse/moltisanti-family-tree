@@ -79,6 +79,7 @@ h1 { font: 800 30px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; letter-spacin
 .tree-canvas:active { cursor: grabbing; }
 .family-line { fill: none; stroke: #b8c9b6; stroke-width: 2; }
 .partner-line { fill: none; stroke: #dfb08d; stroke-width: 2; stroke-dasharray: 5 5; }
+.ended-union .partner-line { stroke-dasharray: 2 5; opacity: .55; }
 .partner-heart { color: #d59068; fill: #fffefa; }
 .person-node { cursor: pointer; transition: opacity .15s; }
 .person-node:focus { outline: none; }
@@ -172,6 +173,7 @@ h1 { font: 800 30px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; letter-spacin
 .family-list h3 { color: #95998f; font-size: 9px; font-weight: 600; margin: 0 0 6px; }
 .family-person-row { display: flex; align-items: center; gap: 4px; }
 .relative-person { display: flex; flex: 1; align-items: center; min-width: 0; width: 100%; gap: 8px; border: 0; padding: 5px 0; text-align: left; color: #485448; background: transparent; font-size: 10px; }
+.union-label { margin-left: auto; color: #8a9183; font-size: 8px; font-weight: 500; text-align: right; }
 .relative-person:hover { color: var(--green); }
 .remove-relationship { flex: 0 0 auto; width: 28px; height: 28px; color: #a14f42; }
 .remove-relationship:hover { background: #fff0ed; }

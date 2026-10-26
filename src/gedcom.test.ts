@@ -30,7 +30,9 @@ describe('GEDCOM 7 export', () => {
     expect(gedcom).toContain('0 @F1@ FAM')
     expect(gedcom).toContain('1 FAMS @F1@')
     expect(gedcom).toContain('1 FAMC @F1@')
-    expect(gedcom).toContain('0 @F1@ FAM\r\n1 HUSB @I1@\r\n1 WIFE @I2@\r\n1 CHIL @I3@')
+    expect(gedcom).toContain(
+      '0 @F1@ FAM\r\n1 HUSB @I1@\r\n1 WIFE @I2@\r\n1 EVEN\r\n2 TYPE PARTNERSHIP\r\n1 _UNION\r\n2 _TYPE PARTNERSHIP\r\n2 _STATUS CURRENT\r\n1 CHIL @I3@',
+    )
     expect(gedcom).not.toMatch(/\bSEX\b/)
     expect(gedcom).toMatch(/0 TRLR\r\n$/)
   })
@@ -58,6 +60,53 @@ describe('GEDCOM 7 export', () => {
     expect(gedcom).toContain('1 OCCU Researcher')
     expect(gedcom).toContain('1 RESI Rome')
     expect(gedcom).toContain('1 NATI Italian')
+  })
+
+  it('exports marriage and partnership kind, status, and end reason', () => {
+    const archive: FamilyArchive = {
+      schemaVersion: 1,
+      people: [
+        { id: 'person-a', firstName: 'Ada', lastName: 'Family' },
+        { id: 'person-b', firstName: 'Bea', lastName: 'Family' },
+        { id: 'person-c', firstName: 'Cora', lastName: 'Family' },
+        { id: 'person-d', firstName: 'Dina', lastName: 'Family' },
+      ],
+      relationships: [
+        {
+          id: 'marriage',
+          type: 'union',
+          from: 'person-a',
+          to: 'person-b',
+          unionKind: 'marriage',
+          unionStatus: 'ended',
+          unionEndReason: 'divorce',
+        },
+        {
+          id: 'partnership',
+          type: 'union',
+          from: 'person-a',
+          to: 'person-c',
+          unionKind: 'partnership',
+          unionStatus: 'ended',
+          unionEndReason: 'separation',
+        },
+        {
+          id: 'annulment',
+          type: 'union',
+          from: 'person-c',
+          to: 'person-d',
+          unionKind: 'marriage',
+          unionStatus: 'ended',
+          unionEndReason: 'annulment',
+        },
+      ],
+    }
+
+    const gedcom = toGedcom(archive)
+
+    expect(gedcom).toContain('1 MARR\r\n1 DIV\r\n1 _UNION\r\n2 _TYPE MARRIAGE\r\n2 _STATUS ENDED\r\n2 _ENDREASON DIVORCE')
+    expect(gedcom).toContain('1 MARR\r\n1 ANUL\r\n1 _UNION\r\n2 _TYPE MARRIAGE\r\n2 _STATUS ENDED\r\n2 _ENDREASON ANNULMENT')
+    expect(gedcom).toContain('1 EVEN\r\n2 TYPE PARTNERSHIP\r\n1 _UNION\r\n2 _TYPE PARTNERSHIP\r\n2 _STATUS ENDED\r\n2 _ENDREASON SEPARATION')
   })
 
   it('represents additional parents with the GEDCOM family association role', () => {
