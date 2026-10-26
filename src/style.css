@@ -22,7 +22,7 @@ button, input, select, textarea { font: inherit; }
 button, a, select { -webkit-tap-highlight-color: transparent; }
 button { cursor: pointer; }
 a { color: inherit; }
-button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, .person-node:focus-visible {
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 3px solid #c8834e; outline-offset: 3px;
 }
 .app-shell { max-width: 1600px; margin: 0 auto; padding: 0 46px 36px; }
@@ -81,6 +81,8 @@ h1 { font: 800 30px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; letter-spacin
 .partner-line { fill: none; stroke: #dfb08d; stroke-width: 2; stroke-dasharray: 5 5; }
 .partner-heart { color: #d59068; fill: #fffefa; }
 .person-node { cursor: pointer; transition: opacity .15s; }
+.person-node:focus { outline: none; }
+.person-node.keyboard-focused { outline: 3px solid #c8834e; outline-offset: 3px; }
 .person-node rect { fill: #fff; stroke: #e8e8e1; stroke-width: 1.4; filter: drop-shadow(0 5px 8px rgba(39,56,40,.08)); }
 .person-node:hover rect { stroke: #9caf98; }
 .person-node.selected rect { stroke: #5b805f; stroke-width: 2.5; }

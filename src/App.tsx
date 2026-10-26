@@ -66,14 +66,32 @@ function App() {
   const [loadingPublishedArchive, setLoadingPublishedArchive] = useState(true)
   const cacheFallbackNotified = useRef(false)
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 1 })
+  const [keyboardFocusedId, setKeyboardFocusedId] = useState<string | null>(null)
   const canvasRef = useRef<SVGSVGElement>(null)
+  const personNodeRefs = useRef(new Map<string, SVGGElement>())
+  const keyboardNavigationMode = useRef(false)
   const stageRef = useRef<HTMLDivElement>(null)
   const treeAreaRef = useRef<HTMLDivElement>(null)
   const [treeFullscreen, setTreeFullscreen] = useState(false)
   const drag = useRef<{ x: number; y: number; viewX: number; viewY: number } | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   const pinch = useRef<{ distance: number; scale: number; worldX: number; worldY: number } | null>(null)
+  const previousSelectedId = useRef(selectedId)
   const suppressClick = useRef(false)
+
+  useEffect(() => {
+    const markKeyboardNavigation = () => { keyboardNavigationMode.current = true }
+    const markPointerNavigation = () => {
+      keyboardNavigationMode.current = false
+      setKeyboardFocusedId(null)
+    }
+    window.addEventListener('keydown', markKeyboardNavigation)
+    window.addEventListener('pointerdown', markPointerNavigation)
+    return () => {
+      window.removeEventListener('keydown', markKeyboardNavigation)
+      window.removeEventListener('pointerdown', markPointerNavigation)
+    }
+  }, [])
 
   useEffect(() => {
     const notifyFallback = () => {
@@ -225,6 +243,10 @@ function App() {
   }
 
   useEffect(() => {
+    const deselectedPerson = previousSelectedId.current !== null && selectedId === null
+    previousSelectedId.current = selectedId
+    if (deselectedPerson) return
+
     const center = () => {
       const box = canvasRef.current?.getBoundingClientRect()
       const points = [...positions.values()]
@@ -894,10 +916,19 @@ function App() {
                     const connected = relatedIds.has(person.id)
                     const years = [person.birthDate?.slice(0, 4), person.deathDate?.slice(0, 4)].filter(Boolean).join(' — ')
                     return <g key={person.id} transform={`translate(${point.x - 80} ${point.y - 52})`}>
-                      <g role="button" tabIndex={0}
+                      <g ref={(node) => {
+                        if (node) personNodeRefs.current.set(person.id, node)
+                        else personNodeRefs.current.delete(person.id)
+                      }} role="button" tabIndex={0}
                         aria-label={`${person.firstName} ${person.lastName}${years ? `, ${years}` : ''}`} aria-pressed={active}
-                        className={`person-node ${active ? 'selected' : ''} ${selectedId && !active && !connected ? 'dimmed' : ''}`}
+                        className={`person-node ${active ? 'selected' : ''} ${selectedId && !active && !connected ? 'dimmed' : ''} ${keyboardFocusedId === person.id ? 'keyboard-focused' : ''}`}
+                        onFocus={() => {
+                          if (keyboardNavigationMode.current) setKeyboardFocusedId(person.id)
+                        }}
+                        onBlur={() => setKeyboardFocusedId((current) => current === person.id ? null : current)}
                         onPointerDown={(event) => {
+                          keyboardNavigationMode.current = false
+                          setKeyboardFocusedId(null)
                           if (event.pointerType !== 'touch') event.stopPropagation()
                         }}
                         onClick={(event) => {
@@ -905,7 +936,45 @@ function App() {
                           if (suppressClick.current) { suppressClick.current = false; return }
                           selectPerson(person.id)
                         }}
-                        onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectPerson(person.id) } }}>
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            keyboardNavigationMode.current = true
+                            setKeyboardFocusedId(person.id)
+                            selectPerson(person.id)
+                            return
+                          }
+                          const directions = {
+                            ArrowLeft: [-1, 0],
+                            ArrowRight: [1, 0],
+                            ArrowUp: [0, -1],
+                            ArrowDown: [0, 1],
+                          } as const
+                          const direction = directions[event.key as keyof typeof directions]
+                          if (!direction) return
+                          event.preventDefault()
+                          keyboardNavigationMode.current = true
+                          const current = positions.get(person.id)
+                          if (!current) return
+                          const next = filtered
+                            .filter((candidate) => candidate.id !== person.id)
+                            .map((candidate) => {
+                              const candidatePoint = positions.get(candidate.id)
+                              if (!candidatePoint) return null
+                              const dx = candidatePoint.x - current.x
+                              const dy = candidatePoint.y - current.y
+                              const primary = dx * direction[0] + dy * direction[1]
+                              if (primary <= 0) return null
+                              const secondary = Math.abs(dx * direction[1] - dy * direction[0])
+                              return { candidate, score: primary + secondary * 1.5 }
+                            })
+                            .filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null)
+                            .sort((a, b) => a.score - b.score)[0]
+                          if (!next) return
+                          setSelectedId(next.candidate.id)
+                          setKeyboardFocusedId(next.candidate.id)
+                          personNodeRefs.current.get(next.candidate.id)?.focus({ preventScroll: true })
+                        }}>
                         <rect width="160" height="104" rx="18" />
                         {person.photo ? <TreePhoto key={`${person.id}:${person.photo}`} personId={person.id} source={person.photo} passphrase={passphrase}
                           onError={(message) => setNotice(`${t('photoVariantFailure')} ${message}`)} />

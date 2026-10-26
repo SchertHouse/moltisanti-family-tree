@@ -23,6 +23,10 @@ Stato verificato per l'implementazione corrente; non sostituisce l'esecuzione de
 - [x] Rimozione amministrativa dei singoli legami familiari con conferma, senza eliminare le persone coinvolte.
 - [x] Campi opzionali persona per nome alternativo, sesso alla nascita, professione, residenza e nazionalità, inclusa esportazione GEDCOM/GEDZIP.
 - [x] Deselezione tramite tocco/click sullo sfondo dell'albero e scroll pagina utilizzabile in landscape con dettagli laterali.
+- [x] Etichetta compatta per la data di morte, senza indicazione ridondante dell'opzionalità.
+- [x] Conservare pan e zoom correnti quando si deseleziona una persona toccando lo sfondo dell'albero.
+- [x] Navigazione spaziale tra i nodi con le frecce e indicatore di focus da tastiera distinto dalla selezione tramite puntatore.
+- [x] Ricaricare le immagini visibili nell'albero dopo aver svuotato la cache delle varianti.
 
 ## Da completare
 

@@ -52,7 +52,7 @@
   "firstName": "Nome",
   "lastName": "Cognome",
   "birthDate": "Data di nascita (DD-MM-YYYY)",
-  "deathDate": "Data di morte (facoltativa; DD-MM-YYYY)",
+  "deathDate": "Data di morte (DD-MM-YYYY)",
   "create": "Aggiungi",
   "relationship": "Aggiungi un legame",
   "removeRelationship": "Rimuovi legame con {name}",

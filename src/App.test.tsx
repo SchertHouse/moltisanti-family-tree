@@ -34,14 +34,16 @@ describe('family tree interface', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add' }))
 
     const personNode = await screen.findByRole('button', { name: 'Ada Lovelace' })
-    fireEvent.click(personNode)
-    expect(screen.getByRole('heading', { name: 'Ada Lovelace' })).toBeInTheDocument()
-
     const canvas = document.querySelector('.tree-canvas')
     if (!canvas) throw new Error('The genealogy tree canvas is not available.')
+    fireEvent.click(personNode)
+    expect(screen.getByRole('heading', { name: 'Ada Lovelace' })).toBeInTheDocument()
+    const viewTransform = canvas.querySelector('g')?.getAttribute('transform')
+
     fireEvent.click(canvas)
 
     expect(screen.queryByRole('heading', { name: 'Ada Lovelace' })).not.toBeInTheDocument()
+    expect(canvas.querySelector('g')?.getAttribute('transform')).toBe(viewTransform)
 
     fireEvent.click(personNode)
     expect(screen.getByRole('heading', { name: 'Ada Lovelace' })).toBeInTheDocument()
@@ -51,6 +53,35 @@ describe('family tree interface', () => {
     fireEvent.click(canvas)
 
     expect(screen.getByRole('heading', { name: 'Ada Lovelace' })).toBeInTheDocument()
+  })
+
+  it('moves keyboard focus to spatially adjacent nodes without a pointer focus ring', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 404 })))
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Admin' }))
+    fireEvent.change(screen.getByLabelText('Local Admin password'), { target: { value: 'moltisantitree' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    for (const firstName of ['Ada', 'Zoe']) {
+      fireEvent.click(screen.getByRole('button', { name: 'Add person' }))
+      fireEvent.change(screen.getByLabelText('First name'), { target: { value: firstName } })
+      fireEvent.change(screen.getByLabelText('Last name'), { target: { value: 'Family' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    }
+
+    const ada = await screen.findByRole('button', { name: 'Ada Family' })
+    fireEvent.pointerDown(ada, { pointerId: 1, pointerType: 'mouse', button: 0 })
+    fireEvent.click(ada)
+    expect(ada).not.toHaveClass('keyboard-focused')
+
+    fireEvent.keyDown(ada, { key: 'ArrowRight' })
+
+    const zoe = screen.getByRole('button', { name: 'Zoe Family' })
+    expect(zoe).toHaveAttribute('aria-pressed', 'true')
+    expect(zoe).toHaveClass('keyboard-focused')
+    expect(document.activeElement).toBe(zoe)
   })
 
   it('fetches the published archive without reusing a stale cached copy', async () => {
@@ -124,6 +155,8 @@ describe('family tree interface', () => {
     fireEvent.change(screen.getByLabelText('Local Admin password'), { target: { value: 'moltisantitree' } })
     fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
     fireEvent.click(screen.getByRole('button', { name: 'Add person' }))
+    expect(screen.getByLabelText('Death date (YYYY-MM-DD)')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Death date (optional)')).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Alex' } })
     fireEvent.change(screen.getByLabelText('Last name'), { target: { value: 'Family' } })
     fireEvent.change(screen.getByLabelText('Alternate name'), { target: { value: 'Alexandra Alias' } })

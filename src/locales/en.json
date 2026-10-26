@@ -52,7 +52,7 @@
   "firstName": "First name",
   "lastName": "Last name",
   "birthDate": "Birth date (YYYY-MM-DD)",
-  "deathDate": "Death date (optional)",
+  "deathDate": "Death date (YYYY-MM-DD)",
   "create": "Add",
   "relationship": "Add a connection",
   "removeRelationship": "Remove connection with {name}",

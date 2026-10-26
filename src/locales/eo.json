@@ -52,7 +52,7 @@
   "firstName": "Antaŭnomo",
   "lastName": "Familia nomo",
   "birthDate": "Naskiĝdato (YYYY-MM-DD)",
-  "deathDate": "Mortodato (nedeviga)",
+  "deathDate": "Mortodato (YYYY-MM-DD)",
   "create": "Aldoni",
   "relationship": "Aldoni ligon",
   "removeRelationship": "Forigi ligon kun {name}",
