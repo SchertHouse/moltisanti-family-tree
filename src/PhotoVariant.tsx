@@ -25,6 +25,7 @@ function usePhotoUrl(
 ): { url: string | null; loading: boolean } {
   const identity = JSON.stringify([personId, source, passphrase, size, priority, lazy])
   const [photo, setPhoto] = useState<PhotoState>({ identity: '', url: null, loading: false })
+  const [cacheRevision, setCacheRevision] = useState(0)
   const errorHandler = useRef(onError)
 
   useEffect(() => {
@@ -38,6 +39,7 @@ function usePhotoUrl(
       if (objectUrl) URL.revokeObjectURL(objectUrl)
       objectUrl = null
       setPhoto({ identity, url: null, loading: false })
+      setCacheRevision((revision) => revision + 1)
     }
     window.addEventListener('image-cache-cleared', clearActiveUrl)
     const load = () => {
@@ -77,7 +79,7 @@ function usePhotoUrl(
       window.removeEventListener('image-cache-cleared', clearActiveUrl)
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [personId, source, passphrase, size, priority, elementRef, lazy, identity])
+  }, [personId, source, passphrase, size, priority, elementRef, lazy, identity, cacheRevision])
 
   return photo.identity === identity
     ? { url: photo.url, loading: photo.loading }

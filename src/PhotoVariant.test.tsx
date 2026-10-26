@@ -73,4 +73,48 @@ describe('visible tree photos', () => {
     unmount()
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:tree-variant')
   })
+
+  it('reloads visible tree photos after the image cache is cleared', async () => {
+    variantMocks.get.mockResolvedValue('data:image/jpeg;base64,dmFyaWFudA==')
+    variantMocks.toBlob.mockReturnValue(new Blob(['variant'], { type: 'image/jpeg' }))
+    vi.stubGlobal('IntersectionObserver', class {
+      constructor(callback: IntersectionObserverCallback) {
+        variantMocks.intersect = () => callback(
+          [{ isIntersecting: true } as IntersectionObserverEntry],
+          {} as IntersectionObserver,
+        )
+      }
+      observe() {}
+      disconnect() {}
+      unobserve() {}
+      takeRecords() { return [] }
+      root = null
+      rootMargin = '0px'
+      thresholds = [0]
+    })
+    vi.spyOn(URL, 'createObjectURL')
+      .mockReturnValueOnce('blob:first-tree-variant')
+      .mockReturnValueOnce('blob:reloaded-tree-variant')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+
+    const { container } = render(<svg><TreePhoto
+      personId="person-2"
+      source="moltisanti-image:v1:encrypted"
+      passphrase="valid passphrase"
+      onError={vi.fn()}
+    /></svg>)
+
+    variantMocks.intersect?.()
+    await waitFor(() => expect(variantMocks.get).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(container.querySelector('image')?.getAttribute('href'))
+      .toBe('blob:first-tree-variant'))
+
+    await act(async () => {
+      window.dispatchEvent(new Event('image-cache-cleared'))
+    })
+    variantMocks.intersect?.()
+    await waitFor(() => expect(variantMocks.get).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(container.querySelector('image')?.getAttribute('href'))
+      .toBe('blob:reloaded-tree-variant'))
+  })
 })
