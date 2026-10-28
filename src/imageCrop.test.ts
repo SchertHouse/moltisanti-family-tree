@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import imageConfig from '../image-config.json'
 import { clampSquareCrop, cropToPixels, normalizedSquareSize } from './imageCrop'
 
 describe('square image crop geometry', () => {
@@ -19,5 +20,12 @@ describe('square image crop geometry', () => {
     expect(normalizedSquareSize(2400, 1200, 1200)).toBe(1200)
     expect(normalizedSquareSize(640, 1200, 1200)).toBe(640)
     expect(() => normalizedSquareSize(640, 0, 1200)).toThrow(/Dimensioni/)
+  })
+
+  it('uses the configured 320 pixel maximum for new normalized photos', () => {
+    expect(imageConfig.normalized.maxWidth).toBe(320)
+    expect(imageConfig.normalized.maxHeight).toBe(320)
+    expect(normalizedSquareSize(2400, imageConfig.normalized.maxWidth, imageConfig.normalized.maxHeight))
+      .toBe(320)
   })
 })

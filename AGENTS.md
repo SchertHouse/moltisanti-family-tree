@@ -22,7 +22,7 @@ Centralizzare i testi dell'interfaccia nelle traduzioni `it`, `en`, `eo`, manten
 
 ## Immagini
 
-`image-config.json` è la fonte versionata e autorevole per formati e limiti in ingresso, risoluzione massima normalizzata (inizialmente 1200 × 1200), qualità JPEG, dimensioni delle varianti, concorrenza e limiti/retention della cache. Non duplicare questi valori nel codice. Ritocco, orientamento EXIF, normalizzazione, cifratura e varianti restano nel browser. Un'immagine normalizzata per persona è conservata cifrata nell'archivio; le varianti si generano on demand e non entrano nell'archivio. IndexedDB può contenere solo varianti cifrate con una chiave derivata dalla passphrase, mai blob o immagini in chiaro. La cache in memoria è temporanea e limitata.
+`image-config.json` è la fonte versionata e autorevole per formati e limiti in ingresso, risoluzione massima normalizzata (320 × 320), qualità JPEG, dimensioni delle varianti, concorrenza e limiti/retention della cache. Non duplicare questi valori nel codice. Ritocco, orientamento EXIF, normalizzazione, cifratura e varianti restano nel browser. Un'immagine normalizzata per persona è conservata cifrata nell'archivio; le varianti si generano on demand e non entrano nell'archivio. IndexedDB può contenere solo varianti cifrate con una chiave derivata dalla passphrase, mai blob o immagini in chiaro. La cache in memoria è temporanea e limitata.
 
 ## Accessibilità
 

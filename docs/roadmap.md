@@ -10,7 +10,8 @@ Stato verificato per l'implementazione corrente; non sostituisce l'esecuzione de
 - [x] Ricordo facoltativo della passphrase cifrata in IndexedDB con chiave non esportabile, apertura automatica, fallback manuale e rimozione.
 - [x] Pubblicazione GitHub Contents dell'archivio cifrato singolo con SHA per aggiornamento e segnalazione conflitti; riuso della chiave attiva o cifratura con nuova passphrase.
 - [x] Ritaglio quadrato delle fotografie prima di associarle a un profilo.
-- [x] Normalizzazione immagini configurabile (massimo iniziale 1200 × 1200), cifratura individuale, varianti generate on demand, concorrenza limitata e cache IndexedDB cifrata con fallback volatile e controllo UI.
+- [x] Normalizzazione immagini configurabile (massimo corrente 320 × 320), cifratura individuale, varianti generate on demand, concorrenza limitata e cache IndexedDB cifrata con fallback volatile e controllo UI.
+- [x] Utility locale per ridimensionare in-place foto profilo e gallerie in JSON in chiaro, con limiti configurabili per esecuzione, ritaglio centrale, nessun upscaling, output atomico e rifiuto esplicito degli input cifrati.
 - [x] Layout genealogico raggruppato: partner attuali e matrimoni (anche conclusi) compatibili allineati, partnership concluse mostrate come legami storici, figli organizzati per insieme di genitori, livelli ordinati per ridurre gli incroci e archi familiari ortogonali condivisi; matrimoni conclusi con cuore spezzato solo per divorzio, annullamento, separazione o altro motivo.
 - [x] Mantenere contigui nel layout i fratelli con lo stesso insieme di genitori, evitando connettori che attraversino rami estranei.
 - [x] Convergenza iterativa di ordinamento e posizioni, con passaggi direzionali e test di allineamento per famiglie ramificate.
