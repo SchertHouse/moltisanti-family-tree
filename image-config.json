@@ -17,7 +17,7 @@
   },
   "variants": {
     "tree": 128,
-    "profile": 800
+    "profile": 320
   },
   "processing": {
     "algorithmVersion": 1,

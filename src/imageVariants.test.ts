@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import imageConfig from '../image-config.json'
 import { decryptImageDataUrl, encryptImageDataUrl } from './crypto'
 
 const cacheMocks = vi.hoisted(() => ({
@@ -59,6 +60,27 @@ describe('on-demand image variants', () => {
     await expect(getImageVariant('person-2', source, 128, passphrase))
       .resolves.toBe('data:image/jpeg;base64,dmFyaWFudA==')
     expect(createBitmap).not.toHaveBeenCalled()
+  })
+
+  it('uses the decrypted source directly for a profile variant within the configured maximum', async () => {
+    const passphrase = 'image cache passphrase'
+    const sourceDataUrl = 'data:image/jpeg;base64,cGhvdG8='
+    const source = await encryptImageDataUrl(sourceDataUrl, passphrase)
+    const bitmap = { width: 320, height: 320, close: vi.fn() }
+    const createBitmap = vi.fn().mockResolvedValue(bitmap)
+    const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext')
+    vi.stubGlobal('createImageBitmap', createBitmap)
+
+    await expect(getImageVariant(
+      'person-profile', source, imageConfig.variants.profile, passphrase,
+    )).resolves.toBe(sourceDataUrl)
+
+    expect(imageConfig.variants.profile).toBe(320)
+    expect(createBitmap).toHaveBeenCalledOnce()
+    expect(bitmap.close).toHaveBeenCalledOnce()
+    expect(cacheMocks.get).not.toHaveBeenCalled()
+    expect(cacheMocks.put).not.toHaveBeenCalled()
+    expect(getContext).not.toHaveBeenCalled()
   })
 
   it('uses a new cache identity when the source image changes', async () => {

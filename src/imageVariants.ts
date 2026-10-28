@@ -103,10 +103,26 @@ export async function getImageVariant(
     if (isEncryptedImage(source) && !passphrase) {
       throw new Error('Aprire nuovamente l’archivio con la passphrase per visualizzare le fotografie.')
     }
+    const canUseSourceAtRequestedSize =
+      size >= imageConfig.normalized.maxWidth && size >= imageConfig.normalized.maxHeight
+    let sourceData: string | undefined
+    let bitmap: DecodedImage | undefined
+    if (canUseSourceAtRequestedSize) {
+      sourceData = isEncryptedImage(source)
+        ? await decryptImageDataUrl(source, passphrase)
+        : source
+      bitmap = await loadBitmap(dataUrlBlob(sourceData))
+      if (bitmap.width <= size && bitmap.height <= size) {
+        bitmap.close()
+        return sourceData
+      }
+    }
+
     const key = await cacheKey(personId, source, size)
     const cached = memoryCache.get(key)
     if (cached) {
       cached.lastUsed = Date.now()
+      bitmap?.close()
       return cached.dataUrl
     }
     if (passphrase) {
@@ -115,6 +131,7 @@ export async function getImageVariant(
         try {
           const cachedData = await decryptImageDataUrl(encryptedCached, passphrase)
           remember(key, cachedData)
+          bitmap?.close()
           return cachedData
         } catch {
           await deleteCachedCiphertext(key)
@@ -122,10 +139,10 @@ export async function getImageVariant(
       }
     }
 
-    const sourceData = isEncryptedImage(source)
+    sourceData ??= isEncryptedImage(source)
       ? await decryptImageDataUrl(source, passphrase)
       : source
-    const bitmap = await loadBitmap(dataUrlBlob(sourceData))
+    bitmap ??= await loadBitmap(dataUrlBlob(sourceData))
     try {
       const cropSize = Math.min(bitmap.width, bitmap.height)
       const outputSize = normalizedSquareSize(cropSize, size, size)
