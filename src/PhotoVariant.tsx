@@ -65,8 +65,20 @@ function usePhotoUrl(
           observer.disconnect()
           load()
         }
-      })
+      }, { root: element.closest('.tree-stage') })
       observer.observe(element)
+      const root = element.closest('.tree-stage')
+      if (root) {
+        const targetBounds = element.getBoundingClientRect()
+        const rootBounds = root.getBoundingClientRect()
+        if (targetBounds.width > 0 && targetBounds.height > 0 &&
+          rootBounds.width > 0 && rootBounds.height > 0 &&
+          targetBounds.right > rootBounds.left && targetBounds.left < rootBounds.right &&
+          targetBounds.bottom > rootBounds.top && targetBounds.top < rootBounds.bottom) {
+          observer.disconnect()
+          load()
+        }
+      }
       return () => {
         active = false
         observer.disconnect()
