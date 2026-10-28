@@ -1,14 +1,12 @@
 import { expect, test } from '@playwright/test'
 
 test.beforeEach(async ({ page }) => {
-  await page.route('**/family-archive.enc.json', (route) =>
+  await page.route('**/family-archive.enc.json**', (route) =>
     route.fulfill({ status: 404, body: 'No test archive' }))
   await page.route('https://api.github.com/**', (route) => route.abort())
   page.on('dialog', (dialog) => void dialog.accept())
   await page.goto('/')
-  const openDialog = page.getByRole('dialog', { name: /Open encrypted archive/ })
-  await expect(openDialog).toBeVisible()
-  await openDialog.getByRole('button', { name: 'Close' }).click()
+  await expect(page.locator('.archive-loading')).toHaveCount(0)
   await page.getByLabel('Language').selectOption('en')
 })
 
