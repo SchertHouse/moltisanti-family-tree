@@ -1,7 +1,62 @@
 import { describe, expect, it } from 'vitest'
-import { birthdayInfo, emptyArchive, generationMap, relationTo, treePositions, uniquePeople, validateArchive, type FamilyArchive } from './model'
+import {
+  birthdayInfo, emptyArchive, familyConnectorBridges, familyConnectorPath, familyConnectorRoutes, generationMap,
+  partnerConnectorGeometry, relationTo, treePositions, uniquePeople, validateArchive, type FamilyArchive,
+} from './model'
 
 describe('family archive validation', () => {
+  it('keeps unobstructed partner connectors straight', () => {
+    const positions = new Map([
+      ['partner-a', { x: 0, y: 0 }],
+      ['partner-b', { x: 240, y: 0 }],
+    ])
+
+    expect(partnerConnectorGeometry('partner-a', 'partner-b', positions)).toEqual({
+      path: 'M 80 0 L 160 0',
+      heartX: 120,
+      heartY: 0,
+    })
+  })
+
+  it('routes around an intervening person with smooth 45-degree corner tangents', () => {
+    const positions = new Map([
+      ['partner-a', { x: 0, y: 0 }],
+      ['partner-b', { x: 400, y: 0 }],
+      ['intervening-person', { x: 200, y: 0 }],
+    ])
+    const connector = partnerConnectorGeometry('partner-a', 'partner-b', positions)
+
+    expect(connector.path).toContain('M 80 -52 C 88 -60, 192 -60, 200 -60 C 208 -60, 312 -60, 320 -52')
+    expect(Math.abs(connector.heartY)).toBeGreaterThan(56)
+  })
+
+  it('places the bypass midway between the descendant bus and skipped card', () => {
+    const positions = new Map([
+      ['partner-a', { x: 0, y: 0 }],
+      ['partner-b', { x: 400, y: 0 }],
+      ['intervening-person', { x: 200, y: 0 }],
+    ])
+    const connector = partnerConnectorGeometry(
+      'partner-a', 'partner-b', positions, positions.keys(), new Map([['intervening-person', -72]]),
+    )
+
+    expect(connector.heartY).toBe(-62)
+    expect(connector.path).toContain('200 -62')
+  })
+
+  it('chooses the lowest clear arc when one side needs a wider detour', () => {
+    const positions = new Map([
+      ['partner-a', { x: 0, y: 0 }],
+      ['partner-b', { x: 400, y: 0 }],
+      ['intervening-person', { x: 200, y: 0 }],
+      ['upper-obstacle', { x: 200, y: -100 }],
+    ])
+    const connector = partnerConnectorGeometry('partner-a', 'partner-b', positions)
+
+    expect(connector.heartY).toBeGreaterThan(56)
+    expect(connector.heartY).toBeLessThan(65)
+  })
+
   it('deduplicates people by ID and preserves their first-seen order', () => {
     const first = { id: 'first', firstName: 'Sara', lastName: 'Family' }
     const second = { id: 'second', firstName: 'Elisabetta', lastName: 'Family' }
@@ -302,6 +357,160 @@ describe('family tree layout', () => {
 
     expect(positions.get('sibling-a')!.y).toBe(positions.get('sibling-z')!.y)
     expect(unrelatedX < Math.min(...siblingXs) || unrelatedX > Math.max(...siblingXs)).toBe(true)
+  })
+
+  it('keeps children sharing one parent together across different co-parents', () => {
+    const archive = emptyArchive()
+    archive.people = [
+      { id: 'parent', firstName: 'Alice', lastName: 'Family' },
+      { id: 'co-parent-a', firstName: 'Davide', lastName: 'Family' },
+      { id: 'co-parent-b', firstName: 'Giuseppe', lastName: 'Family' },
+      { id: 'child-a', firstName: 'Danilo', lastName: 'Family' },
+      { id: 'child-c', firstName: 'Michelangelo', lastName: 'Family' },
+      { id: 'other-parent-a', firstName: 'Greta', lastName: 'Family' },
+      { id: 'other-parent-b', firstName: 'Hana', lastName: 'Family' },
+      { id: 'child-b-other', firstName: 'Iris', lastName: 'Family' },
+    ]
+    archive.relationships = [
+      {
+        id: 'current-partner-a',
+        type: 'union',
+        from: 'parent',
+        to: 'co-parent-a',
+        unionKind: 'partnership',
+        unionStatus: 'current',
+      },
+      {
+        id: 'former-marriage-b',
+        type: 'union',
+        from: 'parent',
+        to: 'co-parent-b',
+        unionKind: 'marriage',
+        unionStatus: 'ended',
+        unionEndReason: 'divorce',
+      },
+      { id: 'parent-child-a', type: 'parent-child', from: 'parent', to: 'child-a' },
+      { id: 'co-parent-b-child-a', type: 'parent-child', from: 'co-parent-b', to: 'child-a' },
+      { id: 'parent-child-c', type: 'parent-child', from: 'parent', to: 'child-c' },
+      { id: 'co-parent-a-child-c', type: 'parent-child', from: 'co-parent-a', to: 'child-c' },
+      { id: 'other-parent-a-child', type: 'parent-child', from: 'other-parent-a', to: 'child-b-other' },
+      { id: 'other-parent-b-child', type: 'parent-child', from: 'other-parent-b', to: 'child-b-other' },
+    ]
+
+    const positions = treePositions(archive)
+    const childIds = ['child-a', 'child-c']
+    const childIndexes = childIds.map((id) =>
+      [...positions.entries()].filter(([, point]) => point.y === positions.get(id)!.y)
+        .sort(([, a], [, b]) => a.x - b.x)
+        .findIndex(([personId]) => personId === id))
+
+    expect(new Set(childIds.map((id) => positions.get(id)!.y)).size).toBe(1)
+    expect(Math.max(...childIndexes) - Math.min(...childIndexes)).toBe(childIds.length - 1)
+    expect(positions.get('parent')!.x).toBeGreaterThan(positions.get('co-parent-a')!.x)
+    expect(positions.get('parent')!.x).toBeLessThan(positions.get('co-parent-b')!.x)
+    expect(positions.get('child-c')!.x).toBeLessThan(positions.get('child-a')!.x)
+
+    const routes = familyConnectorRoutes(archive, positions)
+    const davideFamily = routes.find(({ parentIds }) =>
+      parentIds.includes('parent') && parentIds.includes('co-parent-a'))!
+    const giuseppeFamily = routes.find(({ parentIds }) =>
+      parentIds.includes('parent') && parentIds.includes('co-parent-b'))!
+    expect(davideFamily.parentBusY).not.toBe(giuseppeFamily.parentBusY)
+    expect(davideFamily.parentBranchXs.parent).not.toBe(giuseppeFamily.parentBranchXs.parent)
+    for (const route of [davideFamily, giuseppeFamily]) {
+      const path = familyConnectorPath(route, positions)
+      const branchXs = route.parentIds.map((id) => route.parentBranchXs[id] ?? positions.get(id)!.x)
+      const left = Math.min(...branchXs)
+      const right = Math.max(...branchXs)
+      expect(path).toContain(`M ${left} ${route.parentBusY} L ${right} ${route.parentBusY}`)
+    }
+  })
+
+  it('marks unavoidable family connector crossings with a bridge', () => {
+    const archive = emptyArchive()
+    archive.people = ['parent-a', 'parent-b', 'child-a', 'parent-c', 'parent-d', 'child-b']
+      .map((id) => ({ id, firstName: id, lastName: 'Family' }))
+    archive.relationships = [
+      { id: 'a-to-child-a', type: 'parent-child', from: 'parent-a', to: 'child-a' },
+      { id: 'b-to-child-a', type: 'parent-child', from: 'parent-b', to: 'child-a' },
+      { id: 'c-to-child-b', type: 'parent-child', from: 'parent-c', to: 'child-b' },
+      { id: 'd-to-child-b', type: 'parent-child', from: 'parent-d', to: 'child-b' },
+    ]
+    const positions = new Map([
+      ['parent-a', { x: 0, y: 0 }],
+      ['parent-b', { x: 200, y: 0 }],
+      ['child-a', { x: 100, y: 380 }],
+      ['parent-c', { x: 50, y: 190 }],
+      ['parent-d', { x: 150, y: 190 }],
+      ['child-b', { x: 300, y: 380 }],
+    ])
+
+    const routes = familyConnectorRoutes(archive, positions)
+    expect(familyConnectorBridges(routes, positions)).toContainEqual({ key: '100:285', x: 100, y: 285 })
+  })
+
+  it('connects the parent trunk directly to the full child bus without doubling back', () => {
+    const archive = emptyArchive()
+    archive.people = ['parent-a', 'parent-b', 'child-left', 'child-right']
+      .map((id) => ({ id, firstName: id, lastName: 'Family' }))
+    archive.relationships = [
+      { id: 'a-to-left', type: 'parent-child', from: 'parent-a', to: 'child-left' },
+      { id: 'b-to-left', type: 'parent-child', from: 'parent-b', to: 'child-left' },
+      { id: 'a-to-right', type: 'parent-child', from: 'parent-a', to: 'child-right' },
+      { id: 'b-to-right', type: 'parent-child', from: 'parent-b', to: 'child-right' },
+    ]
+    const positions = new Map([
+      ['parent-a', { x: 0, y: 0 }],
+      ['parent-b', { x: 200, y: 0 }],
+      ['child-left', { x: 50, y: 380 }],
+      ['child-right', { x: 250, y: 380 }],
+    ])
+
+    const [route] = familyConnectorRoutes(archive, positions)
+    const path = familyConnectorPath(route!, positions)
+
+    expect(path).toContain('M 100 190 L 100 306')
+    expect(path).toContain('M 50 306 L 100 306 M 100 306 L 250 306')
+    expect(path).not.toContain('L 50 306 L 250 306')
+  })
+
+  it('uses a vertical branch from the parent bus for a single descendant', () => {
+    const archive = emptyArchive()
+    archive.people = [
+      { id: 'parent-a', firstName: 'Ada', lastName: 'Family' },
+      { id: 'parent-b', firstName: 'Bea', lastName: 'Family' },
+      { id: 'child', firstName: 'Cora', lastName: 'Family' },
+    ]
+    archive.relationships = [
+      { id: 'a-to-child', type: 'parent-child', from: 'parent-a', to: 'child' },
+      { id: 'b-to-child', type: 'parent-child', from: 'parent-b', to: 'child' },
+    ]
+    const positions = new Map([
+      ['parent-a', { x: 0, y: 0 }],
+      ['parent-b', { x: 200, y: 0 }],
+      ['child', { x: 140, y: 380 }],
+    ])
+    const [route] = familyConnectorRoutes(archive, positions)
+    const path = familyConnectorPath(route!, positions)
+
+    expect(path).toContain('M 140 190 L 140 326')
+    expect(path).not.toContain('314')
+  })
+
+  it('extends the parent bus with one elbow when a single descendant is outside it', () => {
+    const archive = emptyArchive()
+    archive.people = ['parent', 'child'].map((id) => ({ id, firstName: id, lastName: 'Family' }))
+    archive.relationships = [
+      { id: 'parent-to-child', type: 'parent-child', from: 'parent', to: 'child' },
+    ]
+    const positions = new Map([
+      ['parent', { x: 100, y: 0 }],
+      ['child', { x: 240, y: 380 }],
+    ])
+    const [route] = familyConnectorRoutes(archive, positions)
+    const path = familyConnectorPath(route!, positions)
+
+    expect(path).toContain('M 100 190 L 240 190 L 240 326')
   })
 
   it('centers parent groups over their children using each group’s actual width', () => {

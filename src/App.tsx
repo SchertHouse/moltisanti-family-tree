@@ -23,8 +23,9 @@ import {
   findKinshipPath, findKinshipRelationship, type KinshipBloodRelationship, type KinshipDirectRole, type KinshipRelationship, type KinshipSex,
 } from './kinship'
 import {
-  birthdayInfo, emptyArchive, generationMap, isSexAtBirth, relationTo, treePositions, validateArchive,
-  isUnionRelationship, uniquePeople, unionDetails, type FamilyArchive, type Person, type Relationship,
+  birthdayInfo, emptyArchive, familyConnectorBridges, familyConnectorPath, familyConnectorRoutes, generationMap,
+  isSexAtBirth, relationTo, treePositions, validateArchive,
+  isUnionRelationship, partnerConnectorGeometry, uniquePeople, unionDetails, type FamilyArchive, type Person, type Relationship,
   type RelationshipType, type UnionEndReason, type UnionKind, type UnionStatus,
 } from './model'
 
@@ -256,29 +257,15 @@ function App() {
     const searchMatch = `${person.firstName} ${person.lastName}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())
     return searchMatch && (generation === 'all' || String(generations.get(person.id) ?? 0) === generation)
   })
+  const visiblePersonIds = new Set(filtered.map(({ id }) => id))
   const relatedIds = new Set(selected ? archive.relationships
     .filter((relationship) => relationship.from === selected.id || relationship.to === selected.id)
     .flatMap((relationship) => [relationship.from, relationship.to]) : [])
-  const familyConnectors = useMemo(() => {
-    const families = new Map<string, { parentIds: string[]; childIds: string[] }>()
-    const parentsByChild = new Map<string, string[]>()
-    for (const relationship of archive.relationships) {
-      if (relationship.type !== 'parent-child') continue
-      parentsByChild.set(relationship.to, [...new Set([...(parentsByChild.get(relationship.to) ?? []), relationship.from])])
-    }
-    for (const [childId, unsortedParentIds] of parentsByChild) {
-      const parentIds = [...unsortedParentIds].sort()
-      const key = JSON.stringify(parentIds)
-      const family = families.get(key) ?? { parentIds, childIds: [] }
-      family.childIds.push(childId)
-      families.set(key, family)
-    }
-    return [...families.entries()].map(([key, family]) => ({
-      key,
-      parentIds: family.parentIds,
-      childIds: [...new Set(family.childIds)].sort(),
-    }))
-  }, [archive])
+  const familyConnectors = useMemo(() => familyConnectorRoutes(archive, positions), [archive, positions])
+  const familyBridges = useMemo(() => familyConnectorBridges(familyConnectors, positions), [familyConnectors, positions])
+  const descendantBusYByPerson = useMemo(() => new Map(
+    familyConnectors.flatMap((route) => route.childIds.map((id) => [id, route.childrenBusY] as const)),
+  ), [familyConnectors])
 
   const relationshipEntries = (personId: string, type: RelationshipType, direction?: 'in' | 'out') => archive.relationships
     .filter((relationship) => (type === 'union'
@@ -1112,37 +1099,28 @@ function App() {
                   setSelectedId(null)
                 }}>
                 <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
-                  {familyConnectors.map(({ key, parentIds, childIds }) => {
+                  {familyConnectors.map((route) => {
+                    const { key, parentIds, childIds } = route
                     if (![...parentIds, ...childIds].every((id) => filtered.some((person) => person.id === id))) return null
                     const parentPoints = parentIds.map((id) => positions.get(id)).filter((point) => point !== undefined)
                     const childPoints = childIds.map((id) => positions.get(id)).filter((point) => point !== undefined)
                     if (parentPoints.length === 0 || childPoints.length === 0) return null
-                    const parentLeft = Math.min(...parentPoints.map((point) => point.x))
-                    const parentRight = Math.max(...parentPoints.map((point) => point.x))
-                    const parentCenter = (parentLeft + parentRight) / 2
-                    const childLeft = Math.min(...childPoints.map((point) => point.x))
-                    const childRight = Math.max(...childPoints.map((point) => point.x))
-                    const parentBottom = Math.max(...parentPoints.map((point) => point.y + 54))
-                    const childTop = Math.min(...childPoints.map((point) => point.y - 54))
-                    const parentsBusY = (parentBottom + childTop) / 2
-                    const childrenBusY = childTop - 12
-                    const parentBranches = parentPoints.map((point) => `M ${point.x} ${point.y + 54} L ${point.x} ${parentsBusY}`).join(' ')
-                    const parentsBus = parentPoints.length > 1 ? `M ${parentLeft} ${parentsBusY} L ${parentRight} ${parentsBusY}` : ''
-                    const familyTrunk = `M ${parentCenter} ${parentsBusY} L ${parentCenter} ${childrenBusY} L ${childLeft} ${childrenBusY}`
-                    const childrenBus = childPoints.length > 1 ? `L ${childRight} ${childrenBusY}` : ''
-                    const childBranches = childPoints.map((point) =>
-                      `M ${point.x} ${childrenBusY} L ${point.x} ${point.y - 54}`).join(' ')
                     return <path key={key} className="family-line"
-                      d={`${parentBranches} ${parentsBus} ${familyTrunk} ${childrenBus} ${childBranches}`} />
+                      d={familyConnectorPath(route, positions)} />
                   })}
+                  {familyBridges.map(({ key, x, y }) => (
+                    <g key={key} aria-hidden="true">
+                      <path className="family-line-bridge-mask" d={`M ${x - 6} ${y} L ${x + 6} ${y}`} />
+                      <path className="family-line-bridge" d={`M ${x - 6} ${y} Q ${x} ${y - 12} ${x + 6} ${y}`} />
+                    </g>
+                  ))}
                   {archive.relationships.filter(isUnionRelationship).map((relationship) => {
                     const from = positions.get(relationship.from)
                     const to = positions.get(relationship.to)
                     if (!from || !to || !filtered.some((p) => p.id === relationship.from) || !filtered.some((p) => p.id === relationship.to)) return null
-                    const direction = to.x >= from.x ? 1 : -1
-                    const path = from.y === to.y
-                      ? `M ${from.x + direction * 80} ${from.y} L ${to.x - direction * 80} ${to.y}`
-                      : `M ${from.x + direction * 80} ${from.y} C ${from.x + direction * 105} ${from.y - 15}, ${to.x - direction * 105} ${to.y - 15}, ${to.x - direction * 80} ${to.y}`
+                    const { path, heartX, heartY } = partnerConnectorGeometry(
+                      relationship.from, relationship.to, positions, visiblePersonIds, descendantBusYByPerson,
+                    )
                     const union = unionDetails(relationship)
                     const brokenHeart = union?.status === 'ended' &&
                       ['divorce', 'annulment', 'separation', 'other'].includes(union.endReason ?? '')
@@ -1150,9 +1128,9 @@ function App() {
                       <path className="partner-line" d={path} />
                       {brokenHeart
                         ? <HeartCrack className="partner-heart partner-heart-broken" aria-hidden="true"
-                          x={(from.x + to.x) / 2 - 6} y={(from.y + to.y) / 2 - 6} size={12} />
+                          x={heartX - 6} y={heartY - 6} size={12} />
                         : <Heart className="partner-heart" aria-hidden="true"
-                          x={(from.x + to.x) / 2 - 6} y={(from.y + to.y) / 2 - 6} size={12} />}
+                          x={heartX - 6} y={heartY - 6} size={12} />}
                     </g>
                   })}
                   {filtered.map((person) => {
