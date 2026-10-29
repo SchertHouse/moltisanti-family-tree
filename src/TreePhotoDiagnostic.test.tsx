@@ -115,10 +115,12 @@ describe('temporary tree photo diagnostic', () => {
     expect(container.querySelector('img')?.getAttribute('src')).toBe('blob:original-photo-test')
     expect(container.querySelector('svg image')?.getAttribute('href'))
       .toBe('blob:original-photo-test')
-    expect([...container.querySelectorAll('small')].map((status) => status.textContent))
-      .toEqual([
-        'Loading…', 'Loading…', 'Loading…', ...Array(6).fill('Failed to display'),
-      ])
+    await waitFor(() => {
+      expect([...container.querySelectorAll('small')].map((status) => status.textContent))
+        .toEqual([
+          'Loading…', 'Loading…', 'Failed to display', ...Array(6).fill('Failed to display'),
+        ])
+    })
 
     unmount()
     expect(revokeObjectURL).toHaveBeenCalledOnce()
