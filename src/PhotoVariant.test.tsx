@@ -110,7 +110,8 @@ describe('visible tree photos', () => {
 
     await waitFor(() => expect(variantMocks.get).toHaveBeenCalledOnce())
     expect(observe).not.toHaveBeenCalled()
-    expect(container.querySelector('image')?.getAttribute('href')).toBe('blob:visible-tree-variant')
+    await waitFor(() => expect(container.querySelector('image')?.getAttribute('href'))
+      .toBe('blob:visible-tree-variant'))
   })
 
   it('uses the tree stage as the observer root for offscreen photos', async () => {
