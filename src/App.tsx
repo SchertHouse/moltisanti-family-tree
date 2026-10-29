@@ -1290,14 +1290,14 @@ function App() {
                 </button>}
               </div>
             </div>
-            {admin && selected.photo && <div className="photo-diagnostic-control">
+            {selected.photo && <div className="photo-diagnostic-control">
               <button type="button" className="button button-light"
                 aria-expanded={photoDiagnosticOpen}
                 onClick={() => setPhotoDiagnosticOpen((open) => !open)}>
                 {t(photoDiagnosticOpen ? 'photoTestHide' : 'photoTestShow')}
               </button>
             </div>}
-            {admin && photoDiagnosticOpen && selected.photo && <TreePhotoDiagnostic
+            {photoDiagnosticOpen && selected.photo && <TreePhotoDiagnostic
               key={`${selected.id}:${selected.photo}`}
               personId={selected.id}
               source={selected.photo}

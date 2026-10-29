@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import imageConfig from '../image-config.json'
 import { translate, type Language, type TranslationKey } from './i18n'
 import { getImageVariant, imageDataUrlToBlob } from './imageVariants'
@@ -24,7 +24,6 @@ const variantRenderings: Rendering[] = [
 interface DiagnosticPhotoState {
   identity: string
   sourceUrl: string | null
-  sourceDataUrl: string | null
   sourceError: string | null
   variantUrl: string | null
   variantDataUrl: string | null
@@ -67,7 +66,6 @@ export default function TreePhotoDiagnostic({
   const [photo, setPhoto] = useState<DiagnosticPhotoState>({
     identity: '',
     sourceUrl: null,
-    sourceDataUrl: null,
     sourceError: null,
     variantUrl: null,
     variantDataUrl: null,
@@ -77,10 +75,11 @@ export default function TreePhotoDiagnostic({
   const currentPhoto = photo.identity === identity
     ? photo
     : {
-      identity, sourceUrl: null, sourceDataUrl: null, sourceError: null,
+      identity, sourceUrl: null, sourceError: null,
       variantUrl: null, variantDataUrl: null, variantError: null, statuses: loadingStatuses,
     }
   const titleId = `tree-photo-diagnostic-${useId().replaceAll(':', '')}`
+  const panelRef = useRef<HTMLElement>(null)
   const t = (key: TranslationKey, values?: Record<string, string | number>) =>
     translate(language, key, values)
 
@@ -94,7 +93,6 @@ export default function TreePhotoDiagnostic({
         : {
           identity,
           sourceUrl: null,
-          sourceDataUrl: null,
           sourceError: null,
           variantUrl: null,
           variantDataUrl: null,
@@ -111,7 +109,7 @@ export default function TreePhotoDiagnostic({
           : source
         if (!active) return
         sourceUrl = URL.createObjectURL(imageDataUrlToBlob(sourceDataUrl))
-        updatePhoto({ sourceDataUrl, sourceUrl })
+        updatePhoto({ sourceUrl })
       } catch (error) {
         if (!active) return
         updatePhoto({
@@ -142,11 +140,32 @@ export default function TreePhotoDiagnostic({
     }
   }, [identity, personId, source, passphrase])
 
-  const setStatus = (rendering: Rendering, status: RenderingStatus) => {
+  const setStatus = useCallback((rendering: Rendering, status: RenderingStatus) => {
     setPhoto((current) => current.identity === identity
       ? { ...current, statuses: { ...current.statuses, [rendering]: status } }
       : current)
-  }
+  }, [identity])
+  useLayoutEffect(() => {
+    const cleanupListeners: Array<() => void> = []
+    const samples = panelRef.current?.querySelectorAll('[data-photo-rendering]') ?? []
+    for (const sample of samples) {
+      const value = sample.getAttribute('data-photo-rendering')
+      const rendering = renderings.find((item) => item === value)
+      if (!rendering) continue
+      const loaded = () => setStatus(rendering, 'loaded')
+      const failed = () => setStatus(rendering, 'failed')
+      sample.addEventListener('load', loaded)
+      sample.addEventListener('error', failed)
+      cleanupListeners.push(() => {
+        sample.removeEventListener('load', loaded)
+        sample.removeEventListener('error', failed)
+      })
+      if (sample instanceof HTMLImageElement && sample.complete) {
+        setStatus(rendering, sample.naturalWidth > 0 ? 'loaded' : 'failed')
+      }
+    }
+    return () => cleanupListeners.forEach((cleanup) => cleanup())
+  }, [currentPhoto.sourceUrl, currentPhoto.variantUrl, setStatus])
   const statusLabel = (status: RenderingStatus) => t(
     status === 'loading' ? 'photoTestLoading' : status === 'loaded' ? 'photoTestLoaded' : 'photoTestFailed',
   )
@@ -160,7 +179,7 @@ export default function TreePhotoDiagnostic({
             : rendering === 'svg-data' ? 'photoTestSvgData' : 'photoTestSvgXlink',
   )
 
-  return <section className="tree-photo-diagnostic" aria-labelledby={`${titleId}-title`}>
+  return <section ref={panelRef} className="tree-photo-diagnostic" aria-labelledby={`${titleId}-title`}>
     <h3 id={`${titleId}-title`}>{t('photoTestTitle')}</h3>
     <p>{t('photoTestHint')}</p>
     {currentPhoto.sourceError && <p role="status">
@@ -172,7 +191,6 @@ export default function TreePhotoDiagnostic({
     <div className="tree-photo-diagnostic-samples">
       {renderings.map((rendering) => {
         const originalSource = rendering.startsWith('source-')
-        const originalSvg = rendering === 'source-svg'
         if (originalSource && currentPhoto.sourceError) return null
         if (!originalSource && currentPhoto.sourceError) return null
         if (!originalSource && currentPhoto.variantError) return <div className="tree-photo-diagnostic-sample" key={rendering}>
@@ -188,25 +206,21 @@ export default function TreePhotoDiagnostic({
         const usesHtml = rendering.startsWith('html') || rendering === 'source-html'
         const usesBlob = rendering.endsWith('blob')
         const source = originalSource
-          ? (originalSvg ? currentPhoto.sourceDataUrl : currentPhoto.sourceUrl)
+          ? currentPhoto.sourceUrl
           : usesBlob ? currentPhoto.variantUrl : currentPhoto.variantDataUrl
         const clipped = rendering === 'svg-clipped-blob'
         const legacyXlink = rendering === 'svg-xlink-data'
-        const handleLoad = () => setStatus(rendering, 'loaded')
-        const handleError = () => setStatus(rendering, 'failed')
         return <div className="tree-photo-diagnostic-sample" key={rendering}>
           <strong>{sampleLabel(rendering)}</strong>
           <div className="tree-photo-diagnostic-preview">
             {usesHtml
-              ? <img src={source ?? undefined} alt="" onLoad={handleLoad} onError={handleError} />
+              ? <img data-photo-rendering={rendering} src={source ?? undefined} alt="" />
               : <svg viewBox="0 0 68 68" role="img" aria-label={sampleLabel(rendering)}>
-                <image x="12" y="12" width="44" height="44"
+                <image data-photo-rendering={rendering} x="12" y="12" width="44" height="44"
                   href={legacyXlink ? undefined : source ?? undefined}
                   xlinkHref={legacyXlink ? source ?? undefined : undefined}
                   preserveAspectRatio="xMidYMid slice"
-                  clipPath={clipped ? 'inset(0 round 22px)' : undefined}
-                  onLoad={handleLoad}
-                  onError={handleError} />
+                  clipPath={clipped ? 'inset(0 round 22px)' : undefined} />
               </svg>}
           </div>
           <small role="status">{statusLabel(currentPhoto.statuses[rendering])}</small>

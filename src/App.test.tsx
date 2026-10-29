@@ -361,6 +361,34 @@ describe('family tree interface', () => {
     expect(screen.queryByRole('dialog', { name: 'Open encrypted archive' })).not.toBeInTheDocument()
   })
 
+  it('lets a viewer open the temporary photo diagnostic without Admin mode', async () => {
+    const archive: FamilyArchive = {
+      schemaVersion: 1,
+      people: [{
+        id: 'photo-person',
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+        photo: 'data:image/jpeg;base64,cGhvdG8=',
+      }],
+      relationships: [],
+    }
+    vi.spyOn(cryptoModule, 'decryptArchive').mockResolvedValue(archive)
+    await saveRememberedPassphrase('viewer photo test key')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ format: 'test-envelope' }))))
+
+    render(<App />)
+
+    await waitFor(() => expect(cryptoModule.decryptArchive).toHaveBeenCalledOnce())
+    fireEvent.click(await screen.findByRole('button', { name: 'Ada Lovelace' }))
+    const openDiagnostic = screen.getByRole('button', { name: 'Test tree photo rendering' })
+    expect(openDiagnostic).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('button', { name: 'Edit person: Ada Lovelace' })).not.toBeInTheDocument()
+
+    fireEvent.click(openDiagnostic)
+    expect(await screen.findByRole('heading', { name: 'Temporary photo rendering test' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Close photo test' })).toHaveAttribute('aria-expanded', 'true')
+  })
+
   it('falls back to the passphrase prompt when the remembered key cannot open the archive', async () => {
     vi.spyOn(cryptoModule, 'decryptArchive').mockRejectedValue(new Error('Invalid key'))
     await saveRememberedPassphrase('stale remembered key')

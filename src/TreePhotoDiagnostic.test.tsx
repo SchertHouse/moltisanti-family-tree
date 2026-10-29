@@ -62,7 +62,7 @@ describe('temporary tree photo diagnostic', () => {
       ]))
     const svgImages = [...container.querySelectorAll('svg image')]
     expect(svgImages.map((image) => image.getAttribute('href'))).toEqual([
-      'data:image/jpeg;base64,b3JpZ2luYWw=',
+      'blob:shared-photo-test',
       'blob:shared-photo-test',
       'blob:shared-photo-test',
       'data:image/jpeg;base64,dGVzdA==',
@@ -110,7 +110,7 @@ describe('temporary tree photo diagnostic', () => {
       .toBeInTheDocument()
     expect(container.querySelector('img')?.getAttribute('src')).toBe('blob:original-photo-test')
     expect(container.querySelector('svg image')?.getAttribute('href'))
-      .toBe('data:image/jpeg;base64,b3JpZ2luYWw=')
+      .toBe('blob:original-photo-test')
     expect([...container.querySelectorAll('small')].map((status) => status.textContent))
       .toEqual(['Loading…', 'Loading…', ...Array(6).fill('Failed to display')])
 

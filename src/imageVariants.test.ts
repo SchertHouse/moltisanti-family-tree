@@ -117,6 +117,63 @@ describe('on-demand image variants', () => {
     expect(context.drawImage).toHaveBeenCalledWith(bitmap, 170, 0, 300, 300, 0, 0, 128, 128)
   })
 
+  it('falls back to an HTML image when createImageBitmap rejects on a browser', async () => {
+    const bitmapError = new TypeError('Unsupported image options')
+    vi.stubGlobal('createImageBitmap', vi.fn().mockRejectedValue(bitmapError))
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:image-fallback')
+
+    class ImageFallback {
+      naturalWidth = 160
+      naturalHeight = 160
+      onload: (() => void) | null = null
+      onerror: (() => void) | null = null
+
+      set src(_value: string) {
+        queueMicrotask(() => this.onload?.())
+      }
+    }
+    vi.stubGlobal('Image', ImageFallback)
+
+    const context = { drawImage: vi.fn() }
+    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+      configurable: true, value: () => context,
+    })
+    vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue('data:image/jpeg;base64,dmFyaWFudA==')
+
+    await expect(getImageVariant(
+      'person-image-fallback', 'data:image/jpeg;base64,cGhvdG8=', 128, '',
+    )).resolves.toBe('data:image/jpeg;base64,dmFyaWFudA==')
+
+    expect(context.drawImage).toHaveBeenCalledWith(
+      expect.any(ImageFallback), 0, 0, 160, 160, 0, 0, 128, 128,
+    )
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:image-fallback')
+  })
+
+  it('reports both decoder failures when the HTML image fallback also fails', async () => {
+    vi.stubGlobal('createImageBitmap', vi.fn().mockRejectedValue(new TypeError('Unsupported image options')))
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:image-fallback-failure')
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+
+    class FailedImageFallback {
+      naturalWidth = 0
+      naturalHeight = 0
+      onload: (() => void) | null = null
+      onerror: (() => void) | null = null
+
+      set src(_value: string) {
+        queueMicrotask(() => this.onerror?.())
+      }
+    }
+    vi.stubGlobal('Image', FailedImageFallback)
+
+    await expect(getImageVariant(
+      'person-image-fallback-failure', 'data:image/jpeg;base64,cGhvdG8=', 128, '',
+    )).rejects.toThrow('Decodifica bitmap: TypeError: Unsupported image options')
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:image-fallback-failure')
+  })
+
   it('does not reveal encrypted sources without a key and reports decryption failures', async () => {
     const passphrase = 'image cache passphrase'
     const source = await encryptImageDataUrl('data:image/jpeg;base64,cGhvdG8=', passphrase)

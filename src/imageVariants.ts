@@ -56,28 +56,46 @@ function dataUrlBlob(dataUrl: string): Blob {
   return new Blob([bytes], { type: match[1] })
 }
 
-async function loadBitmap(blob: Blob): Promise<DecodedImage> {
-  if (typeof createImageBitmap === 'function') {
-    const bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' })
-    return { width: bitmap.width, height: bitmap.height, source: bitmap, close: () => bitmap.close() }
-  }
+function errorText(error: unknown): string {
+  return error instanceof Error ? `${error.name}${error.message ? `: ${error.message}` : ''}` : 'errore sconosciuto'
+}
+
+function loadImageElement(blob: Blob, bitmapError?: unknown): Promise<DecodedImage> {
+  const image = new Image()
   const url = URL.createObjectURL(blob)
   return new Promise<DecodedImage>((resolve, reject) => {
-      const image = new Image()
-      image.onload = () => {
-        resolve({
-          width: image.naturalWidth,
-          height: image.naturalHeight,
-          source: image,
-          close: () => URL.revokeObjectURL(url),
-        })
-      }
-      image.onerror = () => {
+    image.onload = () => {
+      if (image.naturalWidth <= 0 || image.naturalHeight <= 0) {
         URL.revokeObjectURL(url)
-        reject(new Error('Impossibile decodificare l’immagine.'))
+        reject(new Error('L’immagine decodificata non ha dimensioni valide.'))
+        return
       }
-      image.src = url
+      resolve({
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+        source: image,
+        close: () => URL.revokeObjectURL(url),
+      })
+    }
+    image.onerror = () => {
+      URL.revokeObjectURL(url)
+      const bitmapDetails = bitmapError ? ` Decodifica bitmap: ${errorText(bitmapError)}.` : ''
+      reject(new Error(`Impossibile decodificare l’immagine con l’elemento HTML.${bitmapDetails}`))
+    }
+    image.src = url
   })
+}
+
+async function loadBitmap(blob: Blob): Promise<DecodedImage> {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' })
+      return { width: bitmap.width, height: bitmap.height, source: bitmap, close: () => bitmap.close() }
+    } catch (error) {
+      return loadImageElement(blob, error)
+    }
+  }
+  return loadImageElement(blob)
 }
 
 function remember(key: string, dataUrl: string): void {
@@ -151,18 +169,27 @@ export async function getImageVariant(
       canvas.height = outputSize
       const context = canvas.getContext('2d')
       if (!context) throw new Error('Questo browser non può ridimensionare l’immagine.')
-      context.drawImage(
-        bitmap.source,
-        (bitmap.width - cropSize) / 2,
-        (bitmap.height - cropSize) / 2,
-        cropSize,
-        cropSize,
-        0,
-        0,
-        outputSize,
-        outputSize,
-      )
-      const variant = canvas.toDataURL(imageConfig.normalized.format, imageConfig.normalized.quality)
+      try {
+        context.drawImage(
+          bitmap.source,
+          (bitmap.width - cropSize) / 2,
+          (bitmap.height - cropSize) / 2,
+          cropSize,
+          cropSize,
+          0,
+          0,
+          outputSize,
+          outputSize,
+        )
+      } catch (error) {
+        throw new Error(`Impossibile disegnare l’immagine sul canvas: ${errorText(error)}`, { cause: error })
+      }
+      let variant: string
+      try {
+        variant = canvas.toDataURL(imageConfig.normalized.format, imageConfig.normalized.quality)
+      } catch (error) {
+        throw new Error(`Impossibile generare la variante dal canvas: ${errorText(error)}`, { cause: error })
+      }
       remember(key, variant)
       if (passphrase) {
         const encrypted = await encryptImageDataUrl(variant, passphrase)

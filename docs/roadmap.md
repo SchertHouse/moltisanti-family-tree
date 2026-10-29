@@ -30,7 +30,7 @@ Stato verificato per l'implementazione corrente; non sostituisce l'esecuzione de
 - [x] Conservare pan e zoom correnti quando si deseleziona una persona toccando lo sfondo dell'albero.
 - [x] Navigazione spaziale tra i nodi con le frecce e indicatore di focus da tastiera distinto dalla selezione tramite puntatore.
 - [x] Ricaricare le immagini visibili nell'albero dopo aver svuotato la cache delle varianti.
-- [x] Aggiungere un pannello diagnostico temporaneo per confrontare originale e variante albero in HTML/SVG, URL `blob:`/data URL, ritaglio e `xlink:href` su iPhone, mostrando l'errore di generazione senza bloccare il test dell'originale; rimuoverlo dopo il test fisico.
+- [x] Rendere disponibile senza modalità Admin un pannello diagnostico temporaneo per confrontare originale e variante albero in HTML/SVG, URL `blob:`/data URL, ritaglio e `xlink:href` su iPhone; mostrare l'errore di generazione senza bloccare il test dell'originale e rimuovere il pannello dopo il test fisico.
 - [x] Inserire automaticamente i separatori nelle date digitando soltanto le cifre, mantenendo il supporto alle date parziali di solo anno.
 - [x] Riepilogo compleanno per date complete e mese noto (`YYYY-MM`), senza inventare un giorno; il solo anno non produce un promemoria. Il 29 febbraio ricorre al successivo anno bisestile.
 - [x] Calcolo del percorso di parentela registrato, della tipologia e del grado consanguineo in linea retta e collaterale, con termini gender-aware e cugini di grado arbitrario; affinità tramite unioni registrate e percorso esplicito per i collegamenti indiretti non classificabili, senza attribuire loro un grado consanguineo né dedurre legami non registrati.
