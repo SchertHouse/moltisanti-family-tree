@@ -21,6 +21,19 @@ interface PhotoState {
   loading: boolean
 }
 
+function isVisibleWithinRoot(element: Element, root: Element | null): boolean {
+  const target = element.getBoundingClientRect()
+  const bounds = root?.getBoundingClientRect()
+  const left = bounds?.left ?? 0
+  const top = bounds?.top ?? 0
+  const right = bounds?.right ?? window.innerWidth
+  const bottom = bounds?.bottom ?? window.innerHeight
+
+  return target.width > 0 && target.height > 0
+    && target.right > left && target.left < right
+    && target.bottom > top && target.top < bottom
+}
+
 function usePhotoUrl(
   { personId, source, passphrase, onError, onLoadStart }: PhotoProps,
   size: number,
@@ -68,18 +81,23 @@ function usePhotoUrl(
     if (!lazy || !element || typeof IntersectionObserver === 'undefined') {
       load()
     } else {
-      const observer = new IntersectionObserver((entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
+      const root = element.closest('.tree-stage')
+      if (isVisibleWithinRoot(element, root)) {
+        load()
+      } else {
+        const observer = new IntersectionObserver((entries) => {
+          if (entries.some((entry) => entry.isIntersecting)) {
+            observer.disconnect()
+            load()
+          }
+        }, { root })
+        observer.observe(element)
+        return () => {
+          active = false
           observer.disconnect()
-          load()
+          window.removeEventListener('image-cache-cleared', clearActiveUrl)
+          if (objectUrl) URL.revokeObjectURL(objectUrl)
         }
-      })
-      observer.observe(element)
-      return () => {
-        active = false
-        observer.disconnect()
-        window.removeEventListener('image-cache-cleared', clearActiveUrl)
-        if (objectUrl) URL.revokeObjectURL(objectUrl)
       }
     }
     return () => {
