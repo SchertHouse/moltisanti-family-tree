@@ -30,7 +30,7 @@ Stato verificato per l'implementazione corrente; non sostituisce l'esecuzione de
 - [x] Conservare pan e zoom correnti quando si deseleziona una persona toccando lo sfondo dell'albero.
 - [x] Navigazione spaziale tra i nodi con le frecce e indicatore di focus da tastiera distinto dalla selezione tramite puntatore.
 - [x] Ricaricare le immagini visibili nell'albero dopo aver svuotato la cache delle varianti.
-- [x] Rendere disponibile senza modalità Admin un pannello diagnostico temporaneo per confrontare il caricamento della foto nel nodo reale selezionato con il componente `TreePhoto` isolato e le varianti HTML/SVG; mostrare gli errori senza bloccare i confronti e rimuovere il pannello dopo il test fisico.
+- [x] Rendere disponibile senza modalità Admin un pannello diagnostico temporaneo per confrontare il caricamento immediato della foto nel nodo reale selezionato (bypassando `IntersectionObserver`) con il componente `TreePhoto` isolato e le varianti HTML/SVG; mostrare gli errori senza bloccare i confronti.
 - [x] Inserire automaticamente i separatori nelle date digitando soltanto le cifre, mantenendo il supporto alle date parziali di solo anno.
 - [x] Riepilogo compleanno per date complete e mese noto (`YYYY-MM`), senza inventare un giorno; il solo anno non produce un promemoria. Il 29 febbraio ricorre al successivo anno bisestile.
 - [x] Calcolo del percorso di parentela registrato, della tipologia e del grado consanguineo in linea retta e collaterale, con termini gender-aware e cugini di grado arbitrario; affinità tramite unioni registrate e percorso esplicito per i collegamenti indiretti non classificabili, senza attribuire loro un grado consanguineo né dedurre legami non registrati.

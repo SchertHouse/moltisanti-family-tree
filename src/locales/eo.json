@@ -277,7 +277,7 @@
   "photoTestShow": "Testi montradon de arbofoto",
   "photoTestHide": "Fermi fototeston",
   "photoTestTitle": "Provizora testo de fotomontro",
-  "photoTestHint": "Komparu la elektitan foton en ĝia vera arba nodo kun la sama komponanto en ĉi tiu panelo, poste kontrolu la deĉifritan originalon kaj alternativajn HTML/SVG-fontojn. La arkivo ne ŝanĝiĝas.",
+  "photoTestHint": "La elektita foto en la vera arba nodo tuj ŝargiĝas, sen atendi videblecan detekton: tiel ni kontrolas SVG-montreblon sendepende de IntersectionObserver. Komparu ĝin kun la izolita komponanto kaj aliaj fontoj. La arkivo ne ŝanĝiĝas.",
   "photoTestActualTree": "Elektita foto en la vera arba nodo:",
   "photoTestSourceHtml": "Originalo · HTML",
   "photoTestSourceSvg": "Originalo · SVG",

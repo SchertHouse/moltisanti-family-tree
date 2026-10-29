@@ -277,7 +277,7 @@
   "photoTestShow": "Test visualizzazione foto albero",
   "photoTestHide": "Chiudi test foto",
   "photoTestTitle": "Test temporaneo di visualizzazione foto",
-  "photoTestHint": "Confronta la foto selezionata nel nodo reale dell'albero con lo stesso componente in questo pannello, poi verifica l'originale decifrato e le varianti HTML/SVG. L'archivio non viene modificato.",
+  "photoTestHint": "La foto selezionata nel nodo reale viene caricata subito, senza attendere il rilevamento della visibilità: così verifichiamo il rendering SVG indipendentemente da IntersectionObserver. Confrontala con il componente isolato e le altre sorgenti. L'archivio non viene modificato.",
   "photoTestActualTree": "Foto selezionata nel nodo reale:",
   "photoTestSourceHtml": "Originale · HTML",
   "photoTestSourceSvg": "Originale · SVG",

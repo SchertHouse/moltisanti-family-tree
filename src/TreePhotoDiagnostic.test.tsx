@@ -167,6 +167,7 @@ describe('temporary tree photo diagnostic', () => {
       source="data:image/jpeg;base64,b3JpZ2luYWw="
       passphrase=""
       language="en"
+      actualTreeStatus="waiting"
     />)
 
     expect(screen.getAllByText('Waiting for visibility…')).toHaveLength(2)

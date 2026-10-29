@@ -1219,6 +1219,7 @@ function App() {
                         <rect width="160" height="104" rx="18" />
                         {person.photo ? <TreePhoto key={`${person.id}:${person.photo}${isDiagnosticNode ? ':diagnostic' : ''}`}
                           personId={person.id} source={person.photo} passphrase={passphrase}
+                          loadImmediately={isDiagnosticNode}
                           onError={(message) => {
                             if (isDiagnosticNode) setTreePhotoStatus({ personId: person.id, status: 'failed' })
                             setNotice(`${t('photoVariantFailure')} ${message}`)

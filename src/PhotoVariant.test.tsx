@@ -74,6 +74,36 @@ describe('visible tree photos', () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:tree-variant')
   })
 
+  it('can load the selected diagnostic tree photo without waiting for intersection', async () => {
+    const observe = vi.fn()
+    variantMocks.get.mockResolvedValue('data:image/jpeg;base64,dmFyaWFudA==')
+    variantMocks.toBlob.mockReturnValue(new Blob(['variant'], { type: 'image/jpeg' }))
+    vi.stubGlobal('IntersectionObserver', class {
+      constructor() {}
+      observe = observe
+      disconnect() {}
+      unobserve() {}
+      takeRecords() { return [] }
+      root = null
+      rootMargin = '0px'
+      thresholds = [0]
+    })
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:diagnostic-tree-variant')
+
+    const { container } = render(<svg><TreePhoto
+      personId="person-diagnostic"
+      source="moltisanti-image:v1:encrypted"
+      passphrase="valid passphrase"
+      onError={vi.fn()}
+      loadImmediately
+    /></svg>)
+
+    await waitFor(() => expect(variantMocks.get).toHaveBeenCalledOnce())
+    expect(observe).not.toHaveBeenCalled()
+    expect(container.querySelector('image')?.getAttribute('href'))
+      .toBe('blob:diagnostic-tree-variant')
+  })
+
   it('reloads visible tree photos after the image cache is cleared', async () => {
     variantMocks.get.mockResolvedValue('data:image/jpeg;base64,dmFyaWFudA==')
     variantMocks.toBlob.mockReturnValue(new Blob(['variant'], { type: 'image/jpeg' }))

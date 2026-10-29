@@ -6,6 +6,7 @@ import App from './App'
 import * as cryptoModule from './crypto'
 import * as githubModule from './github'
 import * as gedzipModule from './gedzip'
+import * as imageVariantModule from './imageVariants'
 import type { FamilyArchive } from './model'
 import { clearRememberedPassphrase, getRememberedPassphrase, saveRememberedPassphrase } from './rememberedKey'
 
@@ -362,6 +363,12 @@ describe('family tree interface', () => {
   })
 
   it('lets a viewer open the temporary photo diagnostic without Admin mode', async () => {
+    vi.spyOn(imageVariantModule, 'getImageVariant')
+      .mockResolvedValue('data:image/jpeg;base64,dmFyaWFudA==')
+    vi.spyOn(imageVariantModule, 'imageDataUrlToBlob')
+      .mockReturnValue(new Blob(['variant'], { type: 'image/jpeg' }))
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:app-tree-photo')
+
     const archive: FamilyArchive = {
       schemaVersion: 1,
       people: [{
@@ -387,6 +394,14 @@ describe('family tree interface', () => {
     fireEvent.click(openDiagnostic)
     expect(await screen.findByRole('heading', { name: 'Temporary photo rendering test' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Close photo test' })).toHaveAttribute('aria-expanded', 'true')
+
+    const personNode = screen.getByRole('button', { name: 'Ada Lovelace' })
+    const treeImage = personNode.querySelector('image')
+    if (!treeImage) throw new Error('The selected tree node should contain an SVG image.')
+    await waitFor(() => expect(treeImage.getAttribute('href')).toBe('blob:app-tree-photo'))
+    await act(async () => fireEvent.load(treeImage))
+    expect(screen.getByText('Selected photo in actual tree:').parentElement)
+      .toHaveTextContent('Loaded')
   })
 
   it('falls back to the passphrase prompt when the remembered key cannot open the archive', async () => {

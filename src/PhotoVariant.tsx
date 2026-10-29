@@ -95,12 +95,12 @@ function usePhotoUrl(
 }
 
 export function TreePhoto({
-  personId, source, passphrase, onError, onLoadStart, onImageLoad, onImageError,
-}: PhotoProps) {
+  personId, source, passphrase, onError, onLoadStart, onImageLoad, onImageError, loadImmediately = false,
+}: PhotoProps & { loadImmediately?: boolean }) {
   const elementRef = useRef<SVGImageElement>(null)
   const { url, loading } = usePhotoUrl(
     { personId, source, passphrase, onError, onLoadStart },
-    imageConfig.variants.tree, 1, elementRef, true,
+    imageConfig.variants.tree, 1, elementRef, !loadImmediately,
   )
   return <g>
     <image ref={elementRef} href={url ?? undefined} x="12" y="12" width="44" height="44"

@@ -277,7 +277,7 @@
   "photoTestShow": "Test tree photo rendering",
   "photoTestHide": "Close photo test",
   "photoTestTitle": "Temporary photo rendering test",
-  "photoTestHint": "Compare the selected photo in its actual tree node with the same component in this panel, then check the decrypted original and alternate SVG/HTML sources. Nothing is saved to the archive.",
+  "photoTestHint": "The selected photo in the real tree node loads immediately, bypassing visibility detection; this checks SVG rendering independently of IntersectionObserver. Compare it with the isolated component and other image sources. Nothing is saved to the archive.",
   "photoTestActualTree": "Selected photo in actual tree:",
   "photoTestSourceHtml": "Original · HTML",
   "photoTestSourceSvg": "Original · SVG",
