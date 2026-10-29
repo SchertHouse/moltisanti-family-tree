@@ -3,6 +3,8 @@ import { LoaderCircle } from 'lucide-react'
 import imageConfig from '../image-config.json'
 import { getImageVariant, imageDataUrlToBlob } from './imageVariants'
 
+export type PhotoLoadStatus = 'waiting' | 'loading' | 'loaded' | 'failed'
+
 interface PhotoProps {
   personId: string
   source: string

@@ -46,6 +46,8 @@ describe('temporary tree photo diagnostic', () => {
       language="en"
     />)
 
+    expect(container.querySelector('.tree-photo-diagnostic-actual-status'))
+      .toHaveTextContent('Selected photo in actual tree: Waiting for visibility…')
     await waitFor(() => expect(imageMocks.getImageVariant).toHaveBeenCalledTimes(2))
     expect(imageMocks.decryptImageDataUrl).toHaveBeenCalledWith(
       'moltisanti-image:v1:encrypted', 'test passphrase',
@@ -165,7 +167,7 @@ describe('temporary tree photo diagnostic', () => {
       language="en"
     />)
 
-    expect(await screen.findByText('Waiting for visibility…')).toBeInTheDocument()
+    expect(screen.getAllByText('Waiting for visibility…')).toHaveLength(2)
     expect(imageMocks.getImageVariant).toHaveBeenCalledOnce()
 
     await act(async () => observerCallback?.(
@@ -180,5 +182,18 @@ describe('temporary tree photo diagnostic', () => {
     await act(async () => fireEvent.load(image))
     expect(sample?.querySelector('small')).toHaveTextContent('Loaded')
     expect(container.querySelectorAll('svg image')).toHaveLength(6)
+  })
+
+  it('shows the load state reported by the selected production tree node', () => {
+    const { container } = render(<TreePhotoDiagnostic
+      personId="person-tree"
+      source="data:image/jpeg;base64,b3JpZ2luYWw="
+      passphrase=""
+      language="en"
+      actualTreeStatus="loaded"
+    />)
+
+    expect(container.querySelector('.tree-photo-diagnostic-actual-status'))
+      .toHaveTextContent('Selected photo in actual tree: Loaded')
   })
 })

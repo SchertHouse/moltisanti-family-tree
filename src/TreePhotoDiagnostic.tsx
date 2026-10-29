@@ -3,19 +3,20 @@ import imageConfig from '../image-config.json'
 import { translate, type Language, type TranslationKey } from './i18n'
 import { getImageVariant, imageDataUrlToBlob } from './imageVariants'
 import { decryptImageDataUrl, isEncryptedImage } from './crypto'
-import { TreePhoto } from './PhotoVariant'
+import { TreePhoto, type PhotoLoadStatus } from './PhotoVariant'
 
 interface TreePhotoDiagnosticProps {
   personId: string
   source: string
   passphrase: string
   language: Language
+  actualTreeStatus?: PhotoLoadStatus
 }
 
 type Rendering =
   | 'source-html' | 'source-svg' | 'tree-photo'
   | 'html-blob' | 'svg-blob' | 'svg-clipped-blob' | 'html-data' | 'svg-data' | 'svg-xlink-data'
-type RenderingStatus = 'waiting' | 'loading' | 'loaded' | 'failed'
+type RenderingStatus = PhotoLoadStatus
 type RenderingStatuses = Record<Rendering, RenderingStatus>
 
 const variantRenderings: Rendering[] = [
@@ -62,7 +63,7 @@ function errorMessage(error: unknown): string {
 }
 
 export default function TreePhotoDiagnostic({
-  personId, source, passphrase, language,
+  personId, source, passphrase, language, actualTreeStatus = 'waiting',
 }: TreePhotoDiagnosticProps) {
   const identity = JSON.stringify([personId, source, passphrase])
   const [photo, setPhoto] = useState<DiagnosticPhotoState>({
@@ -192,6 +193,9 @@ export default function TreePhotoDiagnostic({
     {currentPhoto.variantError && <p role="status">
       {t('photoTestVariantFailure', { error: currentPhoto.variantError })}
     </p>}
+    <p className="tree-photo-diagnostic-actual-status">
+      <strong>{t('photoTestActualTree')}</strong> {statusLabel(actualTreeStatus)}
+    </p>
     <div className="tree-photo-diagnostic-samples">
       {renderings.map((rendering) => {
         const originalSource = rendering.startsWith('source-')

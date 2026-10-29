@@ -12,7 +12,7 @@ import { publishEncryptedArchive } from './github'
 import ImageCropDialog from './ImageCropDialog'
 import imageConfig from '../image-config.json'
 import { clearImageCache } from './imageVariants'
-import { ProfilePhoto, TreePhoto } from './PhotoVariant'
+import { ProfilePhoto, TreePhoto, type PhotoLoadStatus } from './PhotoVariant'
 import TreePhotoDiagnostic from './TreePhotoDiagnostic'
 import { clearRememberedPassphrase, getRememberedPassphrase, saveRememberedPassphrase } from './rememberedKey'
 import { browserLanguage, translate, type Language, type TranslationKey } from './i18n'
@@ -147,6 +147,10 @@ function App() {
   const [admin, setAdmin] = useState(false)
   const [passphrase, setPassphrase] = useState('')
   const [photoDiagnosticOpen, setPhotoDiagnosticOpen] = useState(false)
+  const [treePhotoStatus, setTreePhotoStatus] = useState<{
+    personId: string
+    status: PhotoLoadStatus
+  }>({ personId: '', status: 'waiting' })
   const [rememberPassphrase, setRememberPassphrase] = useState(false)
   const [rememberedKeyAvailable, setRememberedKeyAvailable] = useState(false)
   const [modal, setModal] = useState<Modal>(null)
@@ -1141,6 +1145,7 @@ function App() {
                     const active = selectedId === person.id
                     const connected = relatedIds.has(person.id)
                     const years = [person.birthDate?.slice(0, 4), person.deathDate?.slice(0, 4)].filter(Boolean).join(' — ')
+                    const isDiagnosticNode = photoDiagnosticOpen && person.id === selectedId
                     return <g key={person.id} transform={`translate(${point.x - 80} ${point.y - 52})`}>
                       <g ref={(node) => {
                         if (node) personNodeRefs.current.set(person.id, node)
@@ -1212,8 +1217,21 @@ function App() {
                           if (!selectingKinshipPerson) setSelectedId(next.candidate.id)
                         }}>
                         <rect width="160" height="104" rx="18" />
-                        {person.photo ? <TreePhoto key={`${person.id}:${person.photo}`} personId={person.id} source={person.photo} passphrase={passphrase}
-                          onError={(message) => setNotice(`${t('photoVariantFailure')} ${message}`)} />
+                        {person.photo ? <TreePhoto key={`${person.id}:${person.photo}${isDiagnosticNode ? ':diagnostic' : ''}`}
+                          personId={person.id} source={person.photo} passphrase={passphrase}
+                          onError={(message) => {
+                            if (isDiagnosticNode) setTreePhotoStatus({ personId: person.id, status: 'failed' })
+                            setNotice(`${t('photoVariantFailure')} ${message}`)
+                          }}
+                          onLoadStart={isDiagnosticNode
+                            ? () => setTreePhotoStatus({ personId: person.id, status: 'loading' })
+                            : undefined}
+                          onImageLoad={isDiagnosticNode
+                            ? () => setTreePhotoStatus({ personId: person.id, status: 'loaded' })
+                            : undefined}
+                          onImageError={isDiagnosticNode
+                            ? () => setTreePhotoStatus({ personId: person.id, status: 'failed' })
+                            : undefined} />
                           : <g><circle cx="34" cy="34" r="22" className="node-avatar" /><text x="34" y="39" textAnchor="middle" className="avatar-initial">{person.firstName.slice(0, 1)}{person.lastName.slice(0, 1)}</text></g>}
                         <text x="66" y="30" className="node-name">{person.firstName.slice(0, 13)}</text>
                         <text x="66" y="49" className="node-lastname">{person.lastName.slice(0, 13)}</text>
@@ -1293,7 +1311,10 @@ function App() {
             {selected.photo && <div className="photo-diagnostic-control">
               <button type="button" className="button button-light"
                 aria-expanded={photoDiagnosticOpen}
-                onClick={() => setPhotoDiagnosticOpen((open) => !open)}>
+              onClick={() => {
+                setTreePhotoStatus({ personId: selected.id, status: 'waiting' })
+                setPhotoDiagnosticOpen((open) => !open)
+              }}>
                 {t(photoDiagnosticOpen ? 'photoTestHide' : 'photoTestShow')}
               </button>
             </div>}
@@ -1303,6 +1324,7 @@ function App() {
               source={selected.photo}
               passphrase={passphrase}
               language={language}
+              actualTreeStatus={treePhotoStatus.personId === selected.id ? treePhotoStatus.status : 'waiting'}
             />}
             <section className="family-block"><h3><Users size={15} />{t('family')}</h3>
               {archive.people.length > 1 && <section className="kinship-calculator">
