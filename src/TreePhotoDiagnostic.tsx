@@ -3,6 +3,7 @@ import imageConfig from '../image-config.json'
 import { translate, type Language, type TranslationKey } from './i18n'
 import { getImageVariant, imageDataUrlToBlob } from './imageVariants'
 import { decryptImageDataUrl, isEncryptedImage } from './crypto'
+import { TreePhoto } from './PhotoVariant'
 
 interface TreePhotoDiagnosticProps {
   personId: string
@@ -12,9 +13,9 @@ interface TreePhotoDiagnosticProps {
 }
 
 type Rendering =
-  | 'source-html' | 'source-svg'
+  | 'source-html' | 'source-svg' | 'tree-photo'
   | 'html-blob' | 'svg-blob' | 'svg-clipped-blob' | 'html-data' | 'svg-data' | 'svg-xlink-data'
-type RenderingStatus = 'loading' | 'loaded' | 'failed'
+type RenderingStatus = 'waiting' | 'loading' | 'loaded' | 'failed'
 type RenderingStatuses = Record<Rendering, RenderingStatus>
 
 const variantRenderings: Rendering[] = [
@@ -32,11 +33,12 @@ interface DiagnosticPhotoState {
 }
 
 const renderings: Rendering[] = [
-  'source-html', 'source-svg', ...variantRenderings,
+  'source-html', 'source-svg', 'tree-photo', ...variantRenderings,
 ]
 const loadingStatuses: RenderingStatuses = {
   'source-html': 'loading',
   'source-svg': 'loading',
+  'tree-photo': 'waiting',
   'html-blob': 'loading',
   'svg-blob': 'loading',
   'svg-clipped-blob': 'loading',
@@ -167,7 +169,9 @@ export default function TreePhotoDiagnostic({
     return () => cleanupListeners.forEach((cleanup) => cleanup())
   }, [currentPhoto.sourceUrl, currentPhoto.variantUrl, setStatus])
   const statusLabel = (status: RenderingStatus) => t(
-    status === 'loading' ? 'photoTestLoading' : status === 'loaded' ? 'photoTestLoaded' : 'photoTestFailed',
+    status === 'waiting' ? 'photoTestWaiting'
+      : status === 'loading' ? 'photoTestLoading'
+        : status === 'loaded' ? 'photoTestLoaded' : 'photoTestFailed',
   )
   const sampleLabel = (rendering: Rendering) => t(
     rendering === 'source-html' ? 'photoTestSourceHtml'
@@ -193,6 +197,29 @@ export default function TreePhotoDiagnostic({
         const originalSource = rendering.startsWith('source-')
         if (originalSource && currentPhoto.sourceError) return null
         if (!originalSource && currentPhoto.sourceError) return null
+        if (rendering === 'tree-photo' && !currentPhoto.sourceUrl) {
+          return <div className="tree-photo-diagnostic-sample" key={rendering}>
+            <strong>{t('photoTestTreePhoto')}</strong>
+            <small role="status">{t('photoTestLoading')}</small>
+          </div>
+        }
+        if (rendering === 'tree-photo') return <div className="tree-photo-diagnostic-sample" key={rendering}>
+          <strong>{t('photoTestTreePhoto')}</strong>
+          <div className="tree-photo-diagnostic-preview">
+            <svg viewBox="0 0 68 68" role="img" aria-label={t('photoTestTreePhoto')}>
+              <TreePhoto
+                personId={personId}
+                source={source}
+                passphrase={passphrase}
+                onError={() => setStatus('tree-photo', 'failed')}
+                onLoadStart={() => setStatus('tree-photo', 'loading')}
+                onImageLoad={() => setStatus('tree-photo', 'loaded')}
+                onImageError={() => setStatus('tree-photo', 'failed')}
+              />
+            </svg>
+          </div>
+          <small role="status">{statusLabel(currentPhoto.statuses['tree-photo'])}</small>
+        </div>
         if (!originalSource && currentPhoto.variantError) return <div className="tree-photo-diagnostic-sample" key={rendering}>
           <strong>{sampleLabel(rendering)}</strong>
           <small role="status">{statusLabel('failed')}</small>
@@ -205,7 +232,7 @@ export default function TreePhotoDiagnostic({
         }
         const usesHtml = rendering.startsWith('html') || rendering === 'source-html'
         const usesBlob = rendering.endsWith('blob')
-        const source = originalSource
+        const sampleSource = originalSource
           ? currentPhoto.sourceUrl
           : usesBlob ? currentPhoto.variantUrl : currentPhoto.variantDataUrl
         const clipped = rendering === 'svg-clipped-blob'
@@ -214,11 +241,11 @@ export default function TreePhotoDiagnostic({
           <strong>{sampleLabel(rendering)}</strong>
           <div className="tree-photo-diagnostic-preview">
             {usesHtml
-              ? <img data-photo-rendering={rendering} src={source ?? undefined} alt="" />
+            ? <img data-photo-rendering={rendering} src={sampleSource ?? undefined} alt="" />
               : <svg viewBox="0 0 68 68" role="img" aria-label={sampleLabel(rendering)}>
                 <image data-photo-rendering={rendering} x="12" y="12" width="44" height="44"
-                  href={legacyXlink ? undefined : source ?? undefined}
-                  xlinkHref={legacyXlink ? source ?? undefined : undefined}
+                href={legacyXlink ? undefined : sampleSource ?? undefined}
+                xlinkHref={legacyXlink ? sampleSource ?? undefined : undefined}
                   preserveAspectRatio="xMidYMid slice"
                   clipPath={clipped ? 'inset(0 round 22px)' : undefined} />
               </svg>}

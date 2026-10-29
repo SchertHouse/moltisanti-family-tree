@@ -24,6 +24,7 @@ describe('temporary tree photo diagnostic', () => {
   afterEach(() => {
     cleanup()
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
     imageMocks.getImageVariant.mockReset()
     imageMocks.imageDataUrlToBlob.mockReset()
     imageMocks.decryptImageDataUrl.mockReset()
@@ -45,14 +46,14 @@ describe('temporary tree photo diagnostic', () => {
       language="en"
     />)
 
-    await waitFor(() => expect(imageMocks.getImageVariant).toHaveBeenCalledOnce())
+    await waitFor(() => expect(imageMocks.getImageVariant).toHaveBeenCalledTimes(2))
     expect(imageMocks.decryptImageDataUrl).toHaveBeenCalledWith(
       'moltisanti-image:v1:encrypted', 'test passphrase',
     )
     expect(imageMocks.getImageVariant).toHaveBeenCalledWith(
       'person-1', 'moltisanti-image:v1:encrypted', imageConfig.variants.tree, 'test passphrase', 1,
     )
-    expect(URL.createObjectURL).toHaveBeenCalledTimes(2)
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(3)
 
     await waitFor(() => expect([...container.querySelectorAll('img')].map((image) => image.getAttribute('src')))
       .toEqual([
@@ -65,29 +66,30 @@ describe('temporary tree photo diagnostic', () => {
       'blob:shared-photo-test',
       'blob:shared-photo-test',
       'blob:shared-photo-test',
+      'blob:shared-photo-test',
       'data:image/jpeg;base64,dGVzdA==',
       null,
     ])
-    expect(svgImages[4]?.getAttributeNS('http://www.w3.org/1999/xlink', 'href'))
+    expect(svgImages[5]?.getAttributeNS('http://www.w3.org/1999/xlink', 'href'))
       .toBe('data:image/jpeg;base64,dGVzdA==')
 
     const htmlImages = [...container.querySelectorAll('img')]
-    const clippedSvgImage = svgImages[2]
-    if (htmlImages.length !== 3 || svgImages.length !== 5 || !clippedSvgImage) {
-      throw new Error('All eight photo samples should render.')
+    const clippedSvgImage = svgImages[3]
+    if (htmlImages.length !== 3 || svgImages.length !== 6 || !clippedSvgImage) {
+      throw new Error('All nine photo samples should render.')
     }
     await act(async () => {
       for (const image of [...htmlImages, ...svgImages]) fireEvent.load(image)
     })
-    expect(container.querySelectorAll('small')).toHaveLength(8)
+    expect(container.querySelectorAll('small')).toHaveLength(9)
     expect([...container.querySelectorAll('small')].map((status) => status.textContent))
-      .toEqual(Array(8).fill('Loaded'))
+      .toEqual(Array(9).fill('Loaded'))
 
     await act(async () => fireEvent.error(clippedSvgImage))
-    expect(container.querySelectorAll('small')[4]).toHaveTextContent('Failed to display')
+    expect(container.querySelectorAll('small')[5]).toHaveTextContent('Failed to display')
 
     unmount()
-    expect(revokeObjectURL).toHaveBeenCalledTimes(2)
+    expect(revokeObjectURL).toHaveBeenCalledTimes(3)
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:shared-photo-test')
   })
 
@@ -112,7 +114,9 @@ describe('temporary tree photo diagnostic', () => {
     expect(container.querySelector('svg image')?.getAttribute('href'))
       .toBe('blob:original-photo-test')
     expect([...container.querySelectorAll('small')].map((status) => status.textContent))
-      .toEqual(['Loading…', 'Loading…', ...Array(6).fill('Failed to display')])
+      .toEqual([
+        'Loading…', 'Loading…', 'Waiting for visibility…', ...Array(6).fill('Failed to display'),
+      ])
 
     unmount()
     expect(revokeObjectURL).toHaveBeenCalledOnce()
@@ -133,5 +137,48 @@ describe('temporary tree photo diagnostic', () => {
       .toBeInTheDocument()
     expect(imageMocks.getImageVariant).not.toHaveBeenCalled()
     expect(container.querySelector('img')).not.toBeInTheDocument()
+  })
+
+  it('reports whether the exact lazy tree-photo component enters the viewport and loads', async () => {
+    let observerCallback: IntersectionObserverCallback | null = null
+    vi.stubGlobal('IntersectionObserver', class {
+      constructor(callback: IntersectionObserverCallback) {
+        observerCallback = callback
+      }
+      observe() {}
+      disconnect() {}
+      unobserve() {}
+      takeRecords() { return [] }
+      root = null
+      rootMargin = '0px'
+      thresholds = [0]
+    })
+    imageMocks.getImageVariant.mockResolvedValue('data:image/jpeg;base64,dGVzdA==')
+    imageMocks.imageDataUrlToBlob.mockReturnValue(new Blob(['test'], { type: 'image/jpeg' }))
+    imageMocks.isEncryptedImage.mockReturnValue(false)
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:tree-photo-lazy-test')
+
+    const { container } = render(<TreePhotoDiagnostic
+      personId="person-lazy"
+      source="data:image/jpeg;base64,b3JpZ2luYWw="
+      passphrase=""
+      language="en"
+    />)
+
+    expect(await screen.findByText('Waiting for visibility…')).toBeInTheDocument()
+    expect(imageMocks.getImageVariant).toHaveBeenCalledOnce()
+
+    await act(async () => observerCallback?.(
+      [{ isIntersecting: true } as IntersectionObserverEntry],
+      {} as IntersectionObserver,
+    ))
+    await waitFor(() => expect(imageMocks.getImageVariant).toHaveBeenCalledTimes(2))
+
+    const sample = screen.getByText('Tree photo (lazy)').parentElement
+    const image = sample?.querySelector('svg image')
+    if (!image) throw new Error('The lazy tree-photo image should render.')
+    await act(async () => fireEvent.load(image))
+    expect(sample?.querySelector('small')).toHaveTextContent('Loaded')
+    expect(container.querySelectorAll('svg image')).toHaveLength(6)
   })
 })

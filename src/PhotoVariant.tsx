@@ -8,6 +8,9 @@ interface PhotoProps {
   source: string
   passphrase: string
   onError: (message: string) => void
+  onLoadStart?: () => void
+  onImageLoad?: () => void
+  onImageError?: () => void
 }
 
 interface PhotoState {
@@ -17,7 +20,7 @@ interface PhotoState {
 }
 
 function usePhotoUrl(
-  { personId, source, passphrase, onError }: PhotoProps,
+  { personId, source, passphrase, onError, onLoadStart }: PhotoProps,
   size: number,
   priority: number,
   elementRef: RefObject<Element | null>,
@@ -27,10 +30,12 @@ function usePhotoUrl(
   const [photo, setPhoto] = useState<PhotoState>({ identity: '', url: null, loading: false })
   const [cacheRevision, setCacheRevision] = useState(0)
   const errorHandler = useRef(onError)
+  const loadStartHandler = useRef(onLoadStart)
 
   useEffect(() => {
     errorHandler.current = onError
-  }, [onError])
+    loadStartHandler.current = onLoadStart
+  }, [onError, onLoadStart])
 
   useEffect(() => {
     let active = true
@@ -43,6 +48,7 @@ function usePhotoUrl(
     }
     window.addEventListener('image-cache-cleared', clearActiveUrl)
     const load = () => {
+      loadStartHandler.current?.()
       setPhoto({ identity, url: null, loading: true })
       void getImageVariant(personId, source, size, passphrase, priority).then((dataUrl) => {
         if (!active) return
@@ -86,13 +92,18 @@ function usePhotoUrl(
     : { url: null, loading: false }
 }
 
-export function TreePhoto({ personId, source, passphrase, onError }: PhotoProps) {
+export function TreePhoto({
+  personId, source, passphrase, onError, onLoadStart, onImageLoad, onImageError,
+}: PhotoProps) {
   const elementRef = useRef<SVGImageElement>(null)
-  const { url, loading } = usePhotoUrl({ personId, source, passphrase, onError },
-    imageConfig.variants.tree, 1, elementRef, true)
+  const { url, loading } = usePhotoUrl(
+    { personId, source, passphrase, onError, onLoadStart },
+    imageConfig.variants.tree, 1, elementRef, true,
+  )
   return <g>
     <image ref={elementRef} href={url ?? undefined} x="12" y="12" width="44" height="44"
-      preserveAspectRatio="xMidYMid slice" clipPath="inset(0 round 22px)" />
+      preserveAspectRatio="xMidYMid slice" clipPath="inset(0 round 22px)"
+      onLoad={onImageLoad} onError={onImageError} />
     {loading && <circle className="tree-photo-spinner" cx="34" cy="34" r="7" fill="none"
       stroke="currentColor" strokeWidth="2" strokeDasharray="30 14" strokeLinecap="round" aria-hidden="true" />}
   </g>
