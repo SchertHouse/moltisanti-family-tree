@@ -13,6 +13,7 @@ import ImageCropDialog from './ImageCropDialog'
 import imageConfig from '../image-config.json'
 import { clearImageCache } from './imageVariants'
 import { ProfilePhoto, TreePhoto } from './PhotoVariant'
+import TreePhotoDiagnostic from './TreePhotoDiagnostic'
 import { clearRememberedPassphrase, getRememberedPassphrase, saveRememberedPassphrase } from './rememberedKey'
 import { browserLanguage, translate, type Language, type TranslationKey } from './i18n'
 import {
@@ -145,6 +146,7 @@ function App() {
   const [selectingKinshipPerson, setSelectingKinshipPerson] = useState(false)
   const [admin, setAdmin] = useState(false)
   const [passphrase, setPassphrase] = useState('')
+  const [photoDiagnosticOpen, setPhotoDiagnosticOpen] = useState(false)
   const [rememberPassphrase, setRememberPassphrase] = useState(false)
   const [rememberedKeyAvailable, setRememberedKeyAvailable] = useState(false)
   const [modal, setModal] = useState<Modal>(null)
@@ -527,6 +529,7 @@ function App() {
   const leaveAdmin = () => {
     setAdmin(false)
     setPassphrase('')
+    setPhotoDiagnosticOpen(false)
     setPendingPassphrase('')
     setPendingArchive(null)
     setModal(null)
@@ -1287,6 +1290,20 @@ function App() {
                 </button>}
               </div>
             </div>
+            {admin && selected.photo && <div className="photo-diagnostic-control">
+              <button type="button" className="button button-light"
+                aria-expanded={photoDiagnosticOpen}
+                onClick={() => setPhotoDiagnosticOpen((open) => !open)}>
+                {t(photoDiagnosticOpen ? 'photoTestHide' : 'photoTestShow')}
+              </button>
+            </div>}
+            {admin && photoDiagnosticOpen && selected.photo && <TreePhotoDiagnostic
+              key={`${selected.id}:${selected.photo}`}
+              personId={selected.id}
+              source={selected.photo}
+              passphrase={passphrase}
+              language={language}
+            />}
             <section className="family-block"><h3><Users size={15} />{t('family')}</h3>
               {archive.people.length > 1 && <section className="kinship-calculator">
                 <h4>{t('kinshipCalculator')}</h4>
