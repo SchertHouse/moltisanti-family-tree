@@ -115,7 +115,7 @@ describe('temporary tree photo diagnostic', () => {
       .toBe('blob:original-photo-test')
     expect([...container.querySelectorAll('small')].map((status) => status.textContent))
       .toEqual([
-        'Loading…', 'Loading…', 'Waiting for visibility…', ...Array(6).fill('Failed to display'),
+        'Loading…', 'Loading…', 'Loading…', ...Array(6).fill('Failed to display'),
       ])
 
     unmount()
