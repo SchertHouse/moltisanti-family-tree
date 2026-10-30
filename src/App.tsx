@@ -185,12 +185,14 @@ function App() {
   const [loadingPublishedArchive, setLoadingPublishedArchive] = useState(true)
   const cacheFallbackNotified = useRef(false)
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 1 })
+  const [treePhotoVisibilityRevision, setTreePhotoVisibilityRevision] = useState(0)
   const [keyboardFocusedId, setKeyboardFocusedId] = useState<string | null>(null)
   const canvasRef = useRef<SVGSVGElement>(null)
   const personNodeRefs = useRef(new Map<string, SVGGElement>())
   const keyboardNavigationMode = useRef(false)
   const stageRef = useRef<HTMLDivElement>(null)
   const treeAreaRef = useRef<HTMLDivElement>(null)
+  const [treeStageSize, setTreeStageSize] = useState({ width: 0, height: 0 })
   const [treeFullscreen, setTreeFullscreen] = useState(false)
   const drag = useRef<{ x: number; y: number; viewX: number; viewY: number } | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
@@ -198,6 +200,13 @@ function App() {
   const previousSelectedId = useRef(selectedId)
   const suppressClick = useRef(false)
   const manualDateFields = useRef(new WeakSet<HTMLInputElement>())
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setTreePhotoVisibilityRevision((revision) => revision + 1)
+    }, 100)
+    return () => window.clearTimeout(timer)
+  }, [view])
 
   useEffect(() => {
     const markKeyboardNavigation = (event: KeyboardEvent) => {
@@ -263,6 +272,23 @@ function App() {
     const searchMatch = `${person.firstName} ${person.lastName}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())
     return searchMatch && (generation === 'all' || String(generations.get(person.id) ?? 0) === generation)
   })
+  const visiblePhotoIds = useMemo(() => {
+    const visible = new Set<string>()
+    if (treeStageSize.width <= 0 || treeStageSize.height <= 0) return visible
+    for (const person of filtered) {
+      if (!person.photo) continue
+      const point = positions.get(person.id)
+      if (!point) continue
+      const left = (point.x - 80) * view.scale + view.x
+      const right = (point.x + 80) * view.scale + view.x
+      const top = (point.y - 52) * view.scale + view.y
+      const bottom = (point.y + 52) * view.scale + view.y
+      if (right > 0 && left < treeStageSize.width && bottom > 0 && top < treeStageSize.height) {
+        visible.add(person.id)
+      }
+    }
+    return visible
+  }, [filtered, positions, treeStageSize, view])
   const visiblePersonIds = new Set(filtered.map(({ id }) => id))
   const relatedIds = new Set(selected ? archive.relationships
     .filter((relationship) => relationship.from === selected.id || relationship.to === selected.id)
@@ -462,6 +488,27 @@ function App() {
     stage.addEventListener('wheel', handleWheel, { passive: false })
     return () => stage.removeEventListener('wheel', handleWheel)
   }, [archive.people.length, handleWheel])
+
+  useEffect(() => {
+    const stage = stageRef.current
+    if (!stage || archive.people.length === 0) return
+    const updateSize = () => {
+      const { width, height } = stage.getBoundingClientRect()
+      setTreeStageSize((current) => current.width === width && current.height === height
+        ? current
+        : { width, height })
+    }
+    updateSize()
+    const resizeObserver = typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(updateSize)
+    resizeObserver?.observe(stage)
+    window.addEventListener('resize', updateSize)
+    return () => {
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', updateSize)
+    }
+  }, [archive.people.length])
 
   const startDrag = (event: PointerEvent<SVGSVGElement>) => {
     if (event.button !== 0) return
@@ -1220,6 +1267,8 @@ function App() {
                         {person.photo ? <TreePhoto key={`${person.id}:${person.photo}${isDiagnosticNode ? ':diagnostic' : ''}`}
                           personId={person.id} source={person.photo} passphrase={passphrase}
                           loadImmediately={isDiagnosticNode}
+                          visibilityRevision={treePhotoVisibilityRevision}
+                          loadWhenVisible={visiblePhotoIds.has(person.id)}
                           onError={(message) => {
                             if (isDiagnosticNode) setTreePhotoStatus({ personId: person.id, status: 'failed' })
                             setNotice(`${t('photoVariantFailure')} ${message}`)
