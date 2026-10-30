@@ -37,6 +37,7 @@ Stato verificato per l'implementazione corrente; non sostituisce l'esecuzione de
 - [x] Selezione della persona da confrontare direttamente dall'albero tramite il pulsante mirino accanto alla ricerca di parentela.
 - [x] Cancellazione della persona confrontata dal selettore di parentela con un pulsante accessibile.
 - [x] Suite E2E Playwright per Chromium, Firefox e WebKit desktop e per viewport touch-emulate Chromium/WebKit; i test isolano l'archivio e bloccano le richieste GitHub.
+- [x] Mantenere i controlli della barra superiore raggiungibili su viewport stretti, consentendo alla barra di andare su più righe anziché allargare la pagina.
 - [x] Verifiche pre-rilascio del codice: focus da tastiera confinato nei dialoghi e ripristinato all'apertura, controlli accessibili etichettati, movimento ridotto, viewport stretto senza overflow, layout misurato fino a 5.000 persone e threat review dei percorsi client-side e di pubblicazione. Nessuna vulnerabilità critica o ad alto impatto confermata nel perimetro esaminato.
 
 ## Da completare

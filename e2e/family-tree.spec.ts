@@ -51,3 +51,15 @@ test('keeps keyboard focus inside the Admin dialog and returns it to its opener'
   await expect(dialog).toHaveCount(0)
   await expect(adminButton).toBeFocused()
 })
+
+test('keeps the Admin control reachable without horizontal page scrolling on narrow screens', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 })
+
+  const adminButton = page.getByRole('button', { name: 'Admin' })
+  await expect(adminButton).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+
+  const bounds = await adminButton.boundingBox()
+  expect(bounds).not.toBeNull()
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(320)
+})

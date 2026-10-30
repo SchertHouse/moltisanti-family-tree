@@ -314,10 +314,11 @@ h1 { font: 800 30px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; letter-spacin
 }
 @media (max-width: 440px) {
   .app-shell { padding-left: 10px; padding-right: 10px; }
-  .topbar { height: 63px; }
+  .topbar { height: auto; min-height: 63px; flex-wrap: wrap; gap: 8px 12px; padding: 8px 0; }
   .brand { gap: 7px; }
   .brand-mark { width: 33px; height: 33px; border-radius: 12px; }
   .brand strong { font-size: 11px; }
+  .header-actions { max-width: 100%; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
   .header-actions .button { gap: 4px; padding: 8px; }
   .welcome-row { padding-top: 20px; }
   .welcome-row h1 { font-size: 20px; }
