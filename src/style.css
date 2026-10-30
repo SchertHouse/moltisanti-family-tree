@@ -132,7 +132,13 @@ h1 { font: 800 30px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; letter-spacin
 .detail-close { position: absolute; right: 12px; top: 12px; z-index: 2; }
 .profile-hero { padding: 27px 23px 19px; display: flex; gap: 13px; align-items: center; background: linear-gradient(130deg, #f5f5ee, #edf3eb); }
 .profile-avatar { position: relative; width: 64px; height: 64px; flex: 0 0 64px; border: 3px solid white; box-shadow: 0 4px 12px #31412c18; border-radius: 22px; display: grid; place-items: center; overflow: hidden; background: #dce8d9; color: #527153; font: 700 18px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; }
+.profile-avatar-button { padding: 0; cursor: zoom-in; }
 .profile-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.photo-preview-card { width: min(100%, 760px); padding: 24px; }
+.photo-preview-title { margin: 0 38px 16px 0; color: var(--ink); font: 700 17px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; }
+.photo-preview-frame { position: relative; display: grid; min-height: 120px; place-items: center; overflow: hidden; border-radius: 12px; background: #202820; }
+.photo-preview-frame img { display: block; width: auto; height: auto; max-width: min(100%, 680px); max-height: min(76vh, 680px); object-fit: contain; }
+.photo-preview-frame .profile-photo-spinner { color: white; }
 .profile-photo-spinner { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; color: #527153; }
 .profile-photo-spinner svg { transform-box: view-box; transform-origin: center; animation: spin .8s linear infinite; }
 .tree-photo-spinner { color: #527153; opacity: .8; animation: tree-spinner-dash .8s linear infinite; }

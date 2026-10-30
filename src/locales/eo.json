@@ -194,6 +194,8 @@
   "birthdayIn": "Naskiĝtago post {days} tagoj",
   "birthdayDuringMonth": "Naskiĝtago dum {month}",
   "close": "Fermi",
+  "enlargePhoto": "Pligrandigi la foton de {person}",
+  "photoPreviewTitle": "Foto de {person}",
   "adminHint": "Admin protektas kontraŭ hazardaj ŝanĝoj, ne estas sekura ensaluto.",
   "photo": "Foto",
   "choosePhoto": "Elekti foton",

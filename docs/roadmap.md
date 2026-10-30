@@ -10,6 +10,7 @@ Stato verificato per l'implementazione corrente; non sostituisce l'esecuzione de
 - [x] Ricordo facoltativo della passphrase cifrata in IndexedDB con chiave non esportabile, apertura automatica, fallback manuale e rimozione.
 - [x] Pubblicazione GitHub Contents dell'archivio cifrato singolo con SHA per aggiornamento e segnalazione conflitti; riuso della chiave attiva o cifratura con nuova passphrase.
 - [x] Ritaglio quadrato delle fotografie prima di associarle a un profilo.
+- [x] Apertura dell'immagine originale archiviata per la foto profilo dalla scheda di dettaglio, senza ulteriore ridimensionamento o ritaglio e in un dialogo accessibile.
 - [x] Normalizzazione immagini configurabile (massimo corrente 320 × 320), cifratura individuale, variante profilo fino a 320 px usata direttamente se la sorgente rientra nel limite, varianti on demand, concorrenza limitata e cache IndexedDB cifrata con fallback volatile e controllo UI.
 - [x] Utility locale per ridimensionare in-place foto profilo e gallerie in JSON in chiaro, con limiti configurabili per esecuzione, ritaglio centrale, nessun upscaling, output atomico e rifiuto esplicito degli input cifrati.
 - [x] Layout genealogico raggruppato: partner attuali e matrimoni (anche conclusi) compatibili allineati, partnership concluse mostrate come legami storici, figli organizzati per insieme di genitori, livelli ordinati per ridurre gli incroci e archi familiari ortogonali condivisi; matrimoni conclusi con cuore spezzato solo per divorzio, annullamento, separazione o altro motivo.

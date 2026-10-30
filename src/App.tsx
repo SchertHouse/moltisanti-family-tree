@@ -12,7 +12,7 @@ import { publishEncryptedArchive } from './github'
 import ImageCropDialog from './ImageCropDialog'
 import imageConfig from '../image-config.json'
 import { clearImageCache } from './imageVariants'
-import { ProfilePhoto, TreePhoto } from './PhotoVariant'
+import { OriginalProfilePhoto, ProfilePhoto, TreePhoto } from './PhotoVariant'
 import { clearRememberedPassphrase, getRememberedPassphrase, saveRememberedPassphrase } from './rememberedKey'
 import { browserLanguage, translate, type Language, type TranslationKey } from './i18n'
 import {
@@ -33,7 +33,7 @@ const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'moltisantitree'
 const archivePath = 'public/family-archive.enc.json'
 const photoTypes = imageConfig.input.mimeTypes
 
-type Modal = 'admin' | 'key' | 'person' | 'relationship' | 'publish' | 'import-review' | null
+type Modal = 'admin' | 'key' | 'person' | 'relationship' | 'publish' | 'import-review' | 'photo-preview' | null
 type View = { x: number; y: number; scale: number }
 type BusyAction = 'saving' | 'publishing' | 'exporting-json' | 'exporting-gedzip' | 'opening' | 'importing' | null
 
@@ -1317,9 +1317,14 @@ function App() {
               setSelectedId(null)
             }} aria-label={t('close')}><X size={18} /></button>
             <div className="profile-hero">
-              <div className="profile-avatar">{selected.photo ? <ProfilePhoto key={`${selected.id}:${selected.photo}`} personId={selected.id}
-                source={selected.photo} passphrase={passphrase} onError={(message) => setNotice(`${t('photoVariantFailure')} ${message}`)} />
-                : <span>{selected.firstName.slice(0, 1)}{selected.lastName.slice(0, 1)}</span>}</div>
+              {selected.photo ? <button type="button" className="profile-avatar profile-avatar-button"
+                aria-label={t('enlargePhoto', { person: `${selected.firstName} ${selected.lastName}` })}
+                onClick={() => setModal('photo-preview')}>
+                <ProfilePhoto key={`${selected.id}:${selected.photo}`} personId={selected.id}
+                  source={selected.photo} passphrase={passphrase} onError={(message) => setNotice(`${t('photoVariantFailure')} ${message}`)} />
+              </button> : <div className="profile-avatar">
+                <span>{selected.firstName.slice(0, 1)}{selected.lastName.slice(0, 1)}</span>
+              </div>}
               <div className="profile-identity"><span className="profile-label">{t('profileStory')}</span><h2>{selected.firstName} {selected.lastName}</h2>
                 {selected.birthDate && <p>{selected.birthDate.slice(0, 4)}{selected.deathDate ? ` — ${selected.deathDate.slice(0, 4)}` : ` — ${t('aliveToday')}`}</p>}
                 {admin && <button className="button button-light profile-edit" aria-label={`${t('editPerson')}: ${selected.firstName} ${selected.lastName}`}
@@ -1449,7 +1454,8 @@ function App() {
       {modal && <div className="modal-backdrop" onMouseDown={(event) => {
         if (event.target === event.currentTarget && busyAction === null) cancelModal()
       }}>
-        <section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabIndex={-1}>
+        <section className={`modal-card ${modal === 'photo-preview' ? 'photo-preview-card' : ''}`}
+          role="dialog" aria-modal="true" aria-labelledby="modal-title" tabIndex={-1}>
           <button className="modal-close icon-button" aria-label={t('close')} disabled={busyAction !== null} onClick={cancelModal}><X size={18} /></button>
           {modal === 'admin' && <><div className="modal-symbol"><LockKeyhole size={23} /></div><h2 id="modal-title">{t('admin')}</h2><p>{t('adminHint')}</p>
             <form onSubmit={authenticateAdmin} className="form-stack"><label>{t('password')}<input autoFocus name="password" type="password" required /></label>
@@ -1626,6 +1632,17 @@ function App() {
                   {busyAction === 'publishing' ? t('publishing') : t('publish')}
                 </button></div>
             </form></>}
+          {modal === 'photo-preview' && selected?.photo && <>
+            <h2 id="modal-title" className="photo-preview-title">
+              {t('photoPreviewTitle', { person: `${selected.firstName} ${selected.lastName}` })}
+            </h2>
+            <div className="photo-preview-frame">
+              <OriginalProfilePhoto key={`${selected.id}:${selected.photo}:preview`} personId={selected.id}
+                source={selected.photo} passphrase={passphrase}
+                alt={t('photoPreviewTitle', { person: `${selected.firstName} ${selected.lastName}` })}
+                onError={(message) => setNotice(`${t('photoVariantFailure')} ${message}`)} />
+            </div>
+          </>}
         </section>
       </div>}
     </main>

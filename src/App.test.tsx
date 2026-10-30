@@ -411,6 +411,52 @@ describe('family tree interface', () => {
     expect(screen.queryByRole('heading', { name: 'Ada Lovelace' })).not.toBeInTheDocument()
   })
 
+  it('opens the profile photo enlarged in an accessible dialog and restores focus on Escape', async () => {
+    vi.spyOn(imageVariantModule, 'getImageVariant')
+      .mockResolvedValue('data:image/jpeg;base64,dmFyaWFudA==')
+    const toBlob = vi.spyOn(imageVariantModule, 'imageDataUrlToBlob')
+      .mockReturnValue(new Blob(['variant'], { type: 'image/jpeg' }))
+    const originalDataUrl = 'data:image/jpeg;base64,b3JpZ2luYWw='
+    vi.spyOn(cryptoModule, 'decryptImageDataUrl').mockResolvedValue(originalDataUrl)
+    let objectUrlIndex = 0
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(() => `blob:profile-photo-${++objectUrlIndex}`)
+
+    const archive: FamilyArchive = {
+      schemaVersion: 1,
+      people: [{
+        id: 'preview-person',
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+        photo: 'moltisanti-image:v1:ZW5jcnlwdGVk',
+      }],
+      relationships: [],
+    }
+    vi.spyOn(cryptoModule, 'decryptArchive').mockResolvedValue(archive)
+    await saveRememberedPassphrase('viewer profile preview test key')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ format: 'test-envelope' }))))
+
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ada Lovelace' }))
+
+    const openPhoto = await screen.findByRole('button', { name: 'Enlarge photo of Ada Lovelace' })
+    fireEvent.pointerDown(openPhoto, { pointerId: 1, pointerType: 'mouse', button: 0 })
+    fireEvent.click(openPhoto)
+
+    const dialog = await screen.findByRole('dialog', { name: 'Photo of Ada Lovelace' })
+    const preview = await within(dialog).findByRole('img', { name: 'Photo of Ada Lovelace' })
+    expect(preview.getAttribute('src')).toMatch(/^blob:profile-photo-/)
+    expect(cryptoModule.decryptImageDataUrl).toHaveBeenCalledWith(
+      'moltisanti-image:v1:ZW5jcnlwdGVk', 'viewer profile preview test key',
+    )
+    expect(toBlob).toHaveBeenLastCalledWith(originalDataUrl)
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Close' }))
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    expect(screen.queryByRole('dialog', { name: 'Photo of Ada Lovelace' })).not.toBeInTheDocument()
+    expect(document.activeElement).toBe(openPhoto)
+  })
+
   it('falls back to the passphrase prompt when the remembered key cannot open the archive', async () => {
     vi.spyOn(cryptoModule, 'decryptArchive').mockRejectedValue(new Error('Invalid key'))
     await saveRememberedPassphrase('stale remembered key')

@@ -4,4 +4,6 @@ Lingue iniziali: italiano (`it`), inglese (`en`), esperanto (`eo`), in file JSON
 
 Le etichette dei campi opzionali persona (nome alternativo, sesso alla nascita e valori ammessi, professione, residenza e nazionalità) sono centralizzate nelle tre traduzioni e sottoposte allo stesso test di parità. I campi data inseriscono automaticamente i separatori nel formato della lingua attiva; l'etichetta della data di morte riporta il formato atteso senza qualificarla come facoltativa, per mantenere compatto il layout.
 
+Il controllo per ingrandire la foto nella scheda di dettaglio e il titolo accessibile della relativa anteprima sono localizzati in `it`, `en` ed `eo`.
+
 Il calcolo del percorso di parentela nella scheda persona usa testi localizzati per la ricerca, i legami attraversati, i rapporti di affinità tramite unioni registrate, i collegamenti indiretti e l'assenza di un percorso registrato. Il selettore “Confronta con” include un controllo localizzato e accessibile per cancellare la persona selezionata e il relativo risultato.

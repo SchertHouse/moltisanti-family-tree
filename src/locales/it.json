@@ -194,6 +194,8 @@
   "birthdayIn": "Compleanno tra {days} giorni",
   "birthdayDuringMonth": "Compleanno nel mese di {month}",
   "close": "Chiudi",
+  "enlargePhoto": "Ingrandisci la foto di {person}",
+  "photoPreviewTitle": "Foto di {person}",
   "adminHint": "Admin è una protezione contro modifiche accidentali, non un login sicuro.",
   "photo": "Fotografia",
   "choosePhoto": "Scegli una foto",

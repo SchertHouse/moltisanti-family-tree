@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import imageConfig from '../image-config.json'
+import { decryptImageDataUrl, isEncryptedImage } from './crypto'
 import { getImageVariant, imageDataUrlToBlob } from './imageVariants'
 
 interface PhotoProps {
@@ -97,11 +98,56 @@ export function TreePhoto({
   </g>
 }
 
-export function ProfilePhoto({ personId, source, passphrase, onError }: PhotoProps) {
+export function ProfilePhoto({ personId, source, passphrase, onError, alt = '' }: PhotoProps & { alt?: string }) {
   const { url, loading } = usePhotoUrl({ personId, source, passphrase, onError },
     imageConfig.variants.profile, 0, true, false)
   return <>
     {loading && <span className="profile-photo-spinner" aria-hidden="true"><LoaderCircle size={18} /></span>}
-    <img src={url ?? undefined} alt="" />
+    <img src={url ?? undefined} alt={alt} />
+  </>
+}
+
+export function OriginalProfilePhoto({ personId, source, passphrase, onError, alt = '' }: PhotoProps & { alt?: string }) {
+  const identity = JSON.stringify([personId, source, passphrase])
+  const [photo, setPhoto] = useState<PhotoState>({ identity: '', url: null, loading: false })
+  const errorHandler = useRef(onError)
+
+  useEffect(() => {
+    errorHandler.current = onError
+  }, [onError])
+
+  useEffect(() => {
+    let active = true
+    let objectUrl: string | null = null
+
+    const load = async () => {
+      await Promise.resolve()
+      if (!active) return
+      setPhoto({ identity, url: null, loading: true })
+      try {
+        const original = isEncryptedImage(source)
+          ? await decryptImageDataUrl(source, passphrase)
+          : source
+        if (!active) return
+        objectUrl = URL.createObjectURL(imageDataUrlToBlob(original))
+        setPhoto({ identity, url: objectUrl, loading: false })
+      } catch (error) {
+        if (!active) return
+        setPhoto({ identity, url: null, loading: false })
+        errorHandler.current(error instanceof Error ? error.message : 'Impossibile elaborare la fotografia.')
+      }
+    }
+
+    void load()
+    return () => {
+      active = false
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [identity, passphrase, personId, source])
+
+  const visiblePhoto = photo.identity === identity ? photo : { url: null, loading: false }
+  return <>
+    {visiblePhoto.loading && <span className="profile-photo-spinner" aria-hidden="true"><LoaderCircle size={18} /></span>}
+    <img src={visiblePhoto.url ?? undefined} alt={alt} />
   </>
 }
