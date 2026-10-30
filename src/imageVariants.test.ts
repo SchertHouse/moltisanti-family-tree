@@ -31,18 +31,20 @@ describe('on-demand image variants', () => {
     const passphrase = 'image cache passphrase'
     const source = await encryptImageDataUrl('data:image/jpeg;base64,cGhvdG8=', passphrase)
     const output = 'data:image/jpeg;base64,dmFyaWFudA=='
-    const bitmap = { width: 1600, height: 1600, close: vi.fn() }
+    const size = imageConfig.variants.tree
+    const sourceSize = size * 2
+    const bitmap = { width: sourceSize, height: sourceSize, close: vi.fn() }
     const createBitmap = vi.fn().mockResolvedValue(bitmap)
     vi.stubGlobal('createImageBitmap', createBitmap)
     const context = { drawImage: vi.fn() }
     Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', { configurable: true, value: () => context })
     vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue(output)
 
-    await expect(getImageVariant('person-1', source, 128, passphrase)).resolves.toBe(output)
-    await expect(getImageVariant('person-1', source, 128, passphrase)).resolves.toBe(output)
+    await expect(getImageVariant('person-1', source, size, passphrase)).resolves.toBe(output)
+    await expect(getImageVariant('person-1', source, size, passphrase)).resolves.toBe(output)
 
     expect(createBitmap).toHaveBeenCalledTimes(1)
-    expect(context.drawImage).toHaveBeenCalledWith(bitmap, 0, 0, 1600, 1600, 0, 0, 128, 128)
+    expect(context.drawImage).toHaveBeenCalledWith(bitmap, 0, 0, sourceSize, sourceSize, 0, 0, size, size)
     expect(bitmap.close).toHaveBeenCalledTimes(1)
     expect(cacheMocks.put).toHaveBeenCalledOnce()
     const cachedCiphertext = cacheMocks.put.mock.calls[0]![1] as string
@@ -53,41 +55,43 @@ describe('on-demand image variants', () => {
     const passphrase = 'image cache passphrase'
     const source = await encryptImageDataUrl('data:image/jpeg;base64,cGhvdG8=', passphrase)
     const cached = await encryptImageDataUrl('data:image/jpeg;base64,dmFyaWFudA==', passphrase)
+    const size = imageConfig.variants.tree
     cacheMocks.get.mockResolvedValue(cached)
     const createBitmap = vi.fn()
     vi.stubGlobal('createImageBitmap', createBitmap)
 
-    await expect(getImageVariant('person-2', source, 128, passphrase))
+    await expect(getImageVariant('person-2', source, size, passphrase))
       .resolves.toBe('data:image/jpeg;base64,dmFyaWFudA==')
     expect(createBitmap).not.toHaveBeenCalled()
   })
 
-  it('uses the decrypted source directly for a profile variant within the configured maximum', async () => {
+  it('uses the decrypted source directly when it fits the configured profile variant', async () => {
     const passphrase = 'image cache passphrase'
     const sourceDataUrl = 'data:image/jpeg;base64,cGhvdG8='
     const source = await encryptImageDataUrl(sourceDataUrl, passphrase)
-    const bitmap = { width: 320, height: 320, close: vi.fn() }
+    const size = imageConfig.variants.profile
+    const bitmap = { width: size, height: size, close: vi.fn() }
     const createBitmap = vi.fn().mockResolvedValue(bitmap)
     const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext')
     vi.stubGlobal('createImageBitmap', createBitmap)
 
     await expect(getImageVariant(
-      'person-profile', source, imageConfig.variants.profile, passphrase,
+      'person-profile', source, size, passphrase,
     )).resolves.toBe(sourceDataUrl)
 
-    expect(imageConfig.variants.profile).toBe(320)
     expect(createBitmap).toHaveBeenCalledOnce()
     expect(bitmap.close).toHaveBeenCalledOnce()
-    expect(cacheMocks.get).not.toHaveBeenCalled()
+    expect(cacheMocks.get).toHaveBeenCalledOnce()
     expect(cacheMocks.put).not.toHaveBeenCalled()
     expect(getContext).not.toHaveBeenCalled()
   })
 
   it('uses a new cache identity when the source image changes', async () => {
     const passphrase = 'image cache passphrase'
+    const size = imageConfig.variants.tree
     const first = await encryptImageDataUrl('data:image/jpeg;base64,cGhvdG8=', passphrase)
     const replacement = await encryptImageDataUrl('data:image/jpeg;base64,bmV3cGhvdG8=', passphrase)
-    const bitmap = { width: 256, height: 256, close: vi.fn() }
+    const bitmap = { width: size * 2, height: size * 2, close: vi.fn() }
     const createBitmap = vi.fn().mockResolvedValue(bitmap)
     vi.stubGlobal('createImageBitmap', createBitmap)
     Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
@@ -97,14 +101,15 @@ describe('on-demand image variants', () => {
       .mockReturnValueOnce('data:image/jpeg;base64,Zmlyc3Q=')
       .mockReturnValueOnce('data:image/jpeg;base64,c2Vjb25k')
 
-    await getImageVariant('person-4', first, 128, passphrase)
-    await getImageVariant('person-4', replacement, 128, passphrase)
+    await getImageVariant('person-4', first, size, passphrase)
+    await getImageVariant('person-4', replacement, size, passphrase)
 
     expect(createBitmap).toHaveBeenCalledTimes(2)
   })
 
   it('keeps legacy image proportions by cropping to a centered square', async () => {
-    const bitmap = { width: 640, height: 300, close: vi.fn() }
+    const size = imageConfig.variants.tree
+    const bitmap = { width: size * 5, height: size * 3, close: vi.fn() }
     vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue(bitmap))
     const context = { drawImage: vi.fn() }
     Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
@@ -112,20 +117,23 @@ describe('on-demand image variants', () => {
     })
     vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue('data:image/jpeg;base64,dmFyaWFudA==')
 
-    await getImageVariant('person-7', 'data:image/jpeg;base64,cGhvdG8=', 128, '')
+    await getImageVariant('person-7', 'data:image/jpeg;base64,cGhvdG8=', size, '')
 
-    expect(context.drawImage).toHaveBeenCalledWith(bitmap, 170, 0, 300, 300, 0, 0, 128, 128)
+    expect(context.drawImage).toHaveBeenCalledWith(
+      bitmap, size, 0, size * 3, size * 3, 0, 0, size, size,
+    )
   })
 
   it('falls back to an HTML image when createImageBitmap rejects on a browser', async () => {
+    const size = imageConfig.variants.tree
     const bitmapError = new TypeError('Unsupported image options')
     vi.stubGlobal('createImageBitmap', vi.fn().mockRejectedValue(bitmapError))
     const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:image-fallback')
 
     class ImageFallback {
-      naturalWidth = 160
-      naturalHeight = 160
+      naturalWidth = size * 2
+      naturalHeight = size * 2
       onload: (() => void) | null = null
       onerror: (() => void) | null = null
 
@@ -142,16 +150,17 @@ describe('on-demand image variants', () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue('data:image/jpeg;base64,dmFyaWFudA==')
 
     await expect(getImageVariant(
-      'person-image-fallback', 'data:image/jpeg;base64,cGhvdG8=', 128, '',
+      'person-image-fallback', 'data:image/jpeg;base64,cGhvdG8=', size, '',
     )).resolves.toBe('data:image/jpeg;base64,dmFyaWFudA==')
 
     expect(context.drawImage).toHaveBeenCalledWith(
-      expect.any(ImageFallback), 0, 0, 160, 160, 0, 0, 128, 128,
+      expect.any(ImageFallback), 0, 0, size * 2, size * 2, 0, 0, size, size,
     )
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:image-fallback')
   })
 
   it('reports both decoder failures when the HTML image fallback also fails', async () => {
+    const size = imageConfig.variants.tree
     vi.stubGlobal('createImageBitmap', vi.fn().mockRejectedValue(new TypeError('Unsupported image options')))
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:image-fallback-failure')
     const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
@@ -169,37 +178,40 @@ describe('on-demand image variants', () => {
     vi.stubGlobal('Image', FailedImageFallback)
 
     await expect(getImageVariant(
-      'person-image-fallback-failure', 'data:image/jpeg;base64,cGhvdG8=', 128, '',
+      'person-image-fallback-failure', 'data:image/jpeg;base64,cGhvdG8=', size, '',
     )).rejects.toThrow('Decodifica bitmap: TypeError: Unsupported image options')
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:image-fallback-failure')
   })
 
   it('does not reveal encrypted sources without a key and reports decryption failures', async () => {
     const passphrase = 'image cache passphrase'
+    const size = imageConfig.variants.tree
     const source = await encryptImageDataUrl('data:image/jpeg;base64,cGhvdG8=', passphrase)
     cacheMocks.get.mockResolvedValue(await encryptImageDataUrl('data:image/jpeg;base64,dmFyaWFudA==', passphrase))
-    await expect(getImageVariant('person-3', source, 128, '')).rejects.toThrow(/passphrase/)
-    await expect(getImageVariant('person-3', source, 128, 'incorrect passphrase')).rejects.toThrow(/Chiave immagine/)
+    await expect(getImageVariant('person-3', source, size, '')).rejects.toThrow(/passphrase/)
+    await expect(getImageVariant('person-3', source, size, 'incorrect passphrase')).rejects.toThrow(/Chiave immagine/)
     expect(cacheMocks.remove).toHaveBeenCalled()
   })
 
   it('does not persist generated variants when the user has no encryption key', async () => {
-    const bitmap = { width: 64, height: 64, close: vi.fn() }
+    const size = imageConfig.variants.tree
+    const bitmap = { width: size * 2, height: size * 2, close: vi.fn() }
     vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue(bitmap))
     Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
       configurable: true, value: () => ({ drawImage: vi.fn() }),
     })
     vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue('data:image/jpeg;base64,dmFyaWFudA==')
 
-    await getImageVariant('person-5', 'data:image/jpeg;base64,cGhvdG8=', 128, '')
+    await getImageVariant('person-5', 'data:image/jpeg;base64,cGhvdG8=', size, '')
 
     expect(cacheMocks.put).not.toHaveBeenCalled()
   })
 
   it('announces when persistent storage falls back to the volatile cache', async () => {
     const passphrase = 'image cache passphrase'
+    const size = imageConfig.variants.tree
     const source = await encryptImageDataUrl('data:image/jpeg;base64,cGhvdG8=', passphrase)
-    const bitmap = { width: 64, height: 64, close: vi.fn() }
+    const bitmap = { width: size * 2, height: size * 2, close: vi.fn() }
     vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue(bitmap))
     Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
       configurable: true, value: () => ({ drawImage: vi.fn() }),
@@ -209,7 +221,7 @@ describe('on-demand image variants', () => {
     window.addEventListener('image-cache-fallback', onFallback)
     cacheMocks.put.mockResolvedValue(false)
 
-    await getImageVariant('person-6', source, 128, passphrase)
+    await getImageVariant('person-6', source, size, passphrase)
 
     expect(onFallback).toHaveBeenCalledOnce()
     window.removeEventListener('image-cache-fallback', onFallback)

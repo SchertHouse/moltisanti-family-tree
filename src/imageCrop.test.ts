@@ -17,15 +17,17 @@ describe('square image crop geometry', () => {
   })
 
   it('caps output resolution without enlarging smaller crops', () => {
-    expect(normalizedSquareSize(2400, 1200, 1200)).toBe(1200)
-    expect(normalizedSquareSize(640, 1200, 1200)).toBe(640)
-    expect(() => normalizedSquareSize(640, 0, 1200)).toThrow(/Dimensioni/)
+    const { maxWidth, maxHeight } = imageConfig.normalized
+    expect(normalizedSquareSize(2400, maxWidth, maxHeight))
+      .toBe(Math.min(2400, maxWidth, maxHeight))
+    expect(normalizedSquareSize(640, maxWidth, maxHeight))
+      .toBe(Math.min(640, maxWidth, maxHeight))
+    expect(() => normalizedSquareSize(640, 0, maxHeight)).toThrow(/Dimensioni/)
   })
 
-  it('uses the configured 320 pixel maximum for new normalized photos', () => {
-    expect(imageConfig.normalized.maxWidth).toBe(320)
-    expect(imageConfig.normalized.maxHeight).toBe(320)
+  it('uses the configured maximum for new normalized photos', () => {
+    const expectedSize = Math.min(imageConfig.normalized.maxWidth, imageConfig.normalized.maxHeight)
     expect(normalizedSquareSize(2400, imageConfig.normalized.maxWidth, imageConfig.normalized.maxHeight))
-      .toBe(320)
+      .toBe(expectedSize)
   })
 })

@@ -10,7 +10,7 @@ La chiave e il ciphertext sono entrambi nel profilo locale del browser: questa s
 
 ## Immagini e cache
 
-La configurazione versionata `image-config.json` è la fonte autorevole dei limiti applicativi. Il massimo corrente è **320 × 320 pixel**, modificabile nel file senza intervenire nel codice; il valore è un tetto, non una dimensione obbligatoria, e immagini più piccole non sono ingrandite. Formati, limite del file in ingresso, qualità JPEG, varianti e limiti cache sono configurabili nello stesso file. La modifica del limite si applica alle nuove normalizzazioni e non ridimensiona retroattivamente foto già cifrate negli archivi.
+La configurazione versionata `image-config.json` è la fonte autorevole dei limiti applicativi. Il massimo corrente è **1200 × 1200 pixel**, modificabile nel file senza intervenire nel codice; il valore è un tetto, non una dimensione obbligatoria, e immagini più piccole non sono ingrandite. Formati, limite del file in ingresso, qualità JPEG, varianti e limiti cache sono configurabili nello stesso file. La modifica del limite si applica alle nuove normalizzazioni e non ridimensiona retroattivamente foto già cifrate negli archivi.
 
 Le foto selezionate passano dall'editor di ritaglio quadrato prima di entrare nei dati persona. Il file sorgente viene letto da un URL `blob:` temporaneo, poi revocato alla chiusura dell'editor; `createImageBitmap` usa l'orientamento EXIF quando supportato e il canvas produce un JPEG senza i metadati originali, inclusi quelli GPS. Il ritaglio, l'orientamento e il ridimensionamento avvengono localmente nel browser.
 

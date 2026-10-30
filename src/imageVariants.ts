@@ -161,6 +161,10 @@ export async function getImageVariant(
       ? await decryptImageDataUrl(source, passphrase)
       : source
     bitmap ??= await loadBitmap(dataUrlBlob(sourceData))
+    if (bitmap.width <= size && bitmap.height <= size) {
+      bitmap.close()
+      return sourceData
+    }
     try {
       const cropSize = Math.min(bitmap.width, bitmap.height)
       const outputSize = normalizedSquareSize(cropSize, size, size)
