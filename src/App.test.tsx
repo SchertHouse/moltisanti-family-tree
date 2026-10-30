@@ -362,12 +362,30 @@ describe('family tree interface', () => {
     expect(screen.queryByRole('dialog', { name: 'Open encrypted archive' })).not.toBeInTheDocument()
   })
 
-  it('lets a viewer open the temporary photo diagnostic without Admin mode', async () => {
+  it('loads a photo in the initial tree viewport without selecting its node', async () => {
     vi.spyOn(imageVariantModule, 'getImageVariant')
       .mockResolvedValue('data:image/jpeg;base64,dmFyaWFudA==')
     vi.spyOn(imageVariantModule, 'imageDataUrlToBlob')
       .mockReturnValue(new Blob(['variant'], { type: 'image/jpeg' }))
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:app-tree-photo')
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      const size = this.classList.contains('tree-stage') || this.classList.contains('tree-canvas')
+      return {
+        left: 0, top: 0, right: size ? 400 : 0, bottom: size ? 300 : 0,
+        width: size ? 400 : 0, height: size ? 300 : 0,
+        x: 0, y: 0, toJSON: () => ({}),
+      }
+    })
+    vi.stubGlobal('IntersectionObserver', class {
+      constructor() {}
+      observe() {}
+      disconnect() {}
+      unobserve() {}
+      takeRecords() { return [] }
+      root = null
+      rootMargin = '0px'
+      thresholds = [0]
+    })
 
     const archive: FamilyArchive = {
       schemaVersion: 1,
@@ -385,23 +403,12 @@ describe('family tree interface', () => {
 
     render(<App />)
 
-    await waitFor(() => expect(cryptoModule.decryptArchive).toHaveBeenCalledOnce())
-    fireEvent.click(await screen.findByRole('button', { name: 'Ada Lovelace' }))
-    const openDiagnostic = screen.getByRole('button', { name: 'Test tree photo rendering' })
-    expect(openDiagnostic).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.queryByRole('button', { name: 'Edit person: Ada Lovelace' })).not.toBeInTheDocument()
-
-    fireEvent.click(openDiagnostic)
-    expect(await screen.findByRole('heading', { name: 'Temporary photo rendering test' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Close photo test' })).toHaveAttribute('aria-expanded', 'true')
-
-    const personNode = screen.getByRole('button', { name: 'Ada Lovelace' })
+    const personNode = await screen.findByRole('button', { name: 'Ada Lovelace' })
     const treeImage = personNode.querySelector('image')
     if (!treeImage) throw new Error('The selected tree node should contain an SVG image.')
+    await waitFor(() => expect(imageVariantModule.getImageVariant).toHaveBeenCalledOnce())
     await waitFor(() => expect(treeImage.getAttribute('href')).toBe('blob:app-tree-photo'))
-    await act(async () => fireEvent.load(treeImage))
-    expect(screen.getByText('Selected photo in actual tree:').parentElement)
-      .toHaveTextContent('Loaded')
+    expect(screen.queryByRole('heading', { name: 'Ada Lovelace' })).not.toBeInTheDocument()
   })
 
   it('falls back to the passphrase prompt when the remembered key cannot open the archive', async () => {

@@ -12,8 +12,7 @@ import { publishEncryptedArchive } from './github'
 import ImageCropDialog from './ImageCropDialog'
 import imageConfig from '../image-config.json'
 import { clearImageCache } from './imageVariants'
-import { ProfilePhoto, TreePhoto, type PhotoLoadStatus } from './PhotoVariant'
-import TreePhotoDiagnostic from './TreePhotoDiagnostic'
+import { ProfilePhoto, TreePhoto } from './PhotoVariant'
 import { clearRememberedPassphrase, getRememberedPassphrase, saveRememberedPassphrase } from './rememberedKey'
 import { browserLanguage, translate, type Language, type TranslationKey } from './i18n'
 import {
@@ -146,11 +145,6 @@ function App() {
   const [selectingKinshipPerson, setSelectingKinshipPerson] = useState(false)
   const [admin, setAdmin] = useState(false)
   const [passphrase, setPassphrase] = useState('')
-  const [photoDiagnosticOpen, setPhotoDiagnosticOpen] = useState(false)
-  const [treePhotoStatus, setTreePhotoStatus] = useState<{
-    personId: string
-    status: PhotoLoadStatus
-  }>({ personId: '', status: 'waiting' })
   const [rememberPassphrase, setRememberPassphrase] = useState(false)
   const [rememberedKeyAvailable, setRememberedKeyAvailable] = useState(false)
   const [modal, setModal] = useState<Modal>(null)
@@ -185,7 +179,6 @@ function App() {
   const [loadingPublishedArchive, setLoadingPublishedArchive] = useState(true)
   const cacheFallbackNotified = useRef(false)
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 1 })
-  const [treePhotoVisibilityRevision, setTreePhotoVisibilityRevision] = useState(0)
   const [keyboardFocusedId, setKeyboardFocusedId] = useState<string | null>(null)
   const canvasRef = useRef<SVGSVGElement>(null)
   const personNodeRefs = useRef(new Map<string, SVGGElement>())
@@ -200,13 +193,6 @@ function App() {
   const previousSelectedId = useRef(selectedId)
   const suppressClick = useRef(false)
   const manualDateFields = useRef(new WeakSet<HTMLInputElement>())
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setTreePhotoVisibilityRevision((revision) => revision + 1)
-    }, 100)
-    return () => window.clearTimeout(timer)
-  }, [view])
 
   useEffect(() => {
     const markKeyboardNavigation = (event: KeyboardEvent) => {
@@ -268,15 +254,15 @@ function App() {
   const upcomingBirthday = selected?.birthDate && !selected.deathDate ? birthdayInfo(selected.birthDate) : null
   const generations = useMemo(() => generationMap(archive), [archive])
   const positions = useMemo(() => treePositions(archive), [archive])
-  const filtered = archive.people.filter((person) => {
+  const filtered = useMemo(() => archive.people.filter((person) => {
     const searchMatch = `${person.firstName} ${person.lastName}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())
     return searchMatch && (generation === 'all' || String(generations.get(person.id) ?? 0) === generation)
-  })
+  }), [archive.people, generation, generations, query])
+  const filteredPhotos = useMemo(() => filtered.filter((person) => person.photo), [filtered])
   const visiblePhotoIds = useMemo(() => {
     const visible = new Set<string>()
     if (treeStageSize.width <= 0 || treeStageSize.height <= 0) return visible
-    for (const person of filtered) {
-      if (!person.photo) continue
+    for (const person of filteredPhotos) {
       const point = positions.get(person.id)
       if (!point) continue
       const left = (point.x - 80) * view.scale + view.x
@@ -288,7 +274,7 @@ function App() {
       }
     }
     return visible
-  }, [filtered, positions, treeStageSize, view])
+  }, [filteredPhotos, positions, treeStageSize, view])
   const visiblePersonIds = new Set(filtered.map(({ id }) => id))
   const relatedIds = new Set(selected ? archive.relationships
     .filter((relationship) => relationship.from === selected.id || relationship.to === selected.id)
@@ -580,7 +566,6 @@ function App() {
   const leaveAdmin = () => {
     setAdmin(false)
     setPassphrase('')
-    setPhotoDiagnosticOpen(false)
     setPendingPassphrase('')
     setPendingArchive(null)
     setModal(null)
@@ -1192,7 +1177,6 @@ function App() {
                     const active = selectedId === person.id
                     const connected = relatedIds.has(person.id)
                     const years = [person.birthDate?.slice(0, 4), person.deathDate?.slice(0, 4)].filter(Boolean).join(' — ')
-                    const isDiagnosticNode = photoDiagnosticOpen && person.id === selectedId
                     return <g key={person.id} transform={`translate(${point.x - 80} ${point.y - 52})`}>
                       <g ref={(node) => {
                         if (node) personNodeRefs.current.set(person.id, node)
@@ -1264,24 +1248,10 @@ function App() {
                           if (!selectingKinshipPerson) setSelectedId(next.candidate.id)
                         }}>
                         <rect width="160" height="104" rx="18" />
-                        {person.photo ? <TreePhoto key={`${person.id}:${person.photo}${isDiagnosticNode ? ':diagnostic' : ''}`}
+                        {person.photo ? <TreePhoto key={`${person.id}:${person.photo}`}
                           personId={person.id} source={person.photo} passphrase={passphrase}
-                          loadImmediately={isDiagnosticNode}
-                          visibilityRevision={treePhotoVisibilityRevision}
                           loadWhenVisible={visiblePhotoIds.has(person.id)}
-                          onError={(message) => {
-                            if (isDiagnosticNode) setTreePhotoStatus({ personId: person.id, status: 'failed' })
-                            setNotice(`${t('photoVariantFailure')} ${message}`)
-                          }}
-                          onLoadStart={isDiagnosticNode
-                            ? () => setTreePhotoStatus({ personId: person.id, status: 'loading' })
-                            : undefined}
-                          onImageLoad={isDiagnosticNode
-                            ? () => setTreePhotoStatus({ personId: person.id, status: 'loaded' })
-                            : undefined}
-                          onImageError={isDiagnosticNode
-                            ? () => setTreePhotoStatus({ personId: person.id, status: 'failed' })
-                            : undefined} />
+                          onError={(message) => setNotice(`${t('photoVariantFailure')} ${message}`)} />
                           : <g><circle cx="34" cy="34" r="22" className="node-avatar" /><text x="34" y="39" textAnchor="middle" className="avatar-initial">{person.firstName.slice(0, 1)}{person.lastName.slice(0, 1)}</text></g>}
                         <text x="66" y="30" className="node-name">{person.firstName.slice(0, 13)}</text>
                         <text x="66" y="49" className="node-lastname">{person.lastName.slice(0, 13)}</text>
@@ -1358,24 +1328,6 @@ function App() {
                 </button>}
               </div>
             </div>
-            {selected.photo && <div className="photo-diagnostic-control">
-              <button type="button" className="button button-light"
-                aria-expanded={photoDiagnosticOpen}
-              onClick={() => {
-                setTreePhotoStatus({ personId: selected.id, status: 'waiting' })
-                setPhotoDiagnosticOpen((open) => !open)
-              }}>
-                {t(photoDiagnosticOpen ? 'photoTestHide' : 'photoTestShow')}
-              </button>
-            </div>}
-            {photoDiagnosticOpen && selected.photo && <TreePhotoDiagnostic
-              key={`${selected.id}:${selected.photo}`}
-              personId={selected.id}
-              source={selected.photo}
-              passphrase={passphrase}
-              language={language}
-              actualTreeStatus={treePhotoStatus.personId === selected.id ? treePhotoStatus.status : 'waiting'}
-            />}
             <section className="family-block"><h3><Users size={15} />{t('family')}</h3>
               {archive.people.length > 1 && <section className="kinship-calculator">
                 <h4>{t('kinshipCalculator')}</h4>

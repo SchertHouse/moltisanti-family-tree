@@ -151,8 +151,7 @@ describe('visible tree photos', () => {
     expect(variantMocks.get).not.toHaveBeenCalled()
   })
 
-  it('starts an observed photo when a pan or zoom revision brings it into view', async () => {
-    let imageIsVisible = false
+  it('loads an offscreen photo when pan or zoom brings it into the viewport', async () => {
     const observe = vi.fn()
     variantMocks.get.mockResolvedValue('data:image/jpeg;base64,dmFyaWFudA==')
     variantMocks.toBlob.mockReturnValue(new Blob(['variant'], { type: 'image/jpeg' }))
@@ -165,22 +164,6 @@ describe('visible tree photos', () => {
       root = null
       rootMargin = '0px'
       thresholds = [0]
-    })
-    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
-      return this.classList.contains('tree-stage')
-        ? {
-          left: 10, top: 20, right: 410, bottom: 420, width: 400, height: 400,
-          x: 10, y: 20, toJSON: () => ({}),
-        } as DOMRect
-        : imageIsVisible
-          ? {
-            left: 30, top: 40, right: 74, bottom: 84, width: 44, height: 44,
-            x: 30, y: 40, toJSON: () => ({}),
-          } as DOMRect
-          : {
-            left: 500, top: 500, right: 544, bottom: 544, width: 44, height: 44,
-            x: 500, y: 500, toJSON: () => ({}),
-          } as DOMRect
     })
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:panned-tree-variant')
 
@@ -189,18 +172,16 @@ describe('visible tree photos', () => {
       source="moltisanti-image:v1:encrypted"
       passphrase="valid passphrase"
       onError={vi.fn()}
-      visibilityRevision={0}
     /></svg></div>)
 
     expect(observe).toHaveBeenCalledOnce()
     expect(variantMocks.get).not.toHaveBeenCalled()
-    imageIsVisible = true
     rerender(<div className="tree-stage"><svg><TreePhoto
       personId="person-panned"
       source="moltisanti-image:v1:encrypted"
       passphrase="valid passphrase"
       onError={vi.fn()}
-      visibilityRevision={1}
+      loadWhenVisible
     /></svg></div>)
 
     await waitFor(() => expect(variantMocks.get).toHaveBeenCalledOnce())
@@ -208,37 +189,7 @@ describe('visible tree photos', () => {
       .toBe('blob:panned-tree-variant'))
   })
 
-  it('can load the selected diagnostic tree photo without waiting for intersection', async () => {
-    const observe = vi.fn()
-    variantMocks.get.mockResolvedValue('data:image/jpeg;base64,dmFyaWFudA==')
-    variantMocks.toBlob.mockReturnValue(new Blob(['variant'], { type: 'image/jpeg' }))
-    vi.stubGlobal('IntersectionObserver', class {
-      constructor() {}
-      observe = observe
-      disconnect() {}
-      unobserve() {}
-      takeRecords() { return [] }
-      root = null
-      rootMargin = '0px'
-      thresholds = [0]
-    })
-    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:diagnostic-tree-variant')
-
-    const { container } = render(<svg><TreePhoto
-      personId="person-diagnostic"
-      source="moltisanti-image:v1:encrypted"
-      passphrase="valid passphrase"
-      onError={vi.fn()}
-      loadImmediately
-    /></svg>)
-
-    await waitFor(() => expect(variantMocks.get).toHaveBeenCalledOnce())
-    expect(observe).not.toHaveBeenCalled()
-    expect(container.querySelector('image')?.getAttribute('href'))
-      .toBe('blob:diagnostic-tree-variant')
-  })
-
-  it('starts a photo that the tree viewport calculation marks visible', async () => {
+  it('starts a photo that the viewport calculation marks visible', async () => {
     const observe = vi.fn()
     variantMocks.get.mockResolvedValue('data:image/jpeg;base64,dmFyaWFudA==')
     variantMocks.toBlob.mockReturnValue(new Blob(['variant'], { type: 'image/jpeg' }))
@@ -254,7 +205,7 @@ describe('visible tree photos', () => {
     })
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:viewport-tree-variant')
 
-    const { container, rerender } = render(<svg><TreePhoto
+    const { container } = render(<svg><TreePhoto
       personId="person-in-viewport"
       source="moltisanti-image:v1:encrypted"
       passphrase="valid passphrase"
@@ -266,15 +217,6 @@ describe('visible tree photos', () => {
     expect(observe).toHaveBeenCalledOnce()
     await waitFor(() => expect(container.querySelector('image')?.getAttribute('href'))
       .toBe('blob:viewport-tree-variant'))
-
-    rerender(<svg><TreePhoto
-      personId="person-in-viewport"
-      source="moltisanti-image:v1:encrypted"
-      passphrase="valid passphrase"
-      onError={vi.fn()}
-    /></svg>)
-    expect(container.querySelector('image')?.getAttribute('href')).toBe('blob:viewport-tree-variant')
-    expect(variantMocks.get).toHaveBeenCalledOnce()
   })
 
   it('reloads visible tree photos after the image cache is cleared', async () => {
