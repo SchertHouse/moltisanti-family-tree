@@ -179,8 +179,14 @@ function App() {
   const [loadingPublishedArchive, setLoadingPublishedArchive] = useState(true)
   const cacheFallbackNotified = useRef(false)
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 1 })
+  const viewRef = useRef(view)
+  const pendingView = useRef<View | null>(null)
+  const viewFrame = useRef<number | null>(null)
+  const wheelCommitTimer = useRef<number | null>(null)
   const [keyboardFocusedId, setKeyboardFocusedId] = useState<string | null>(null)
   const canvasRef = useRef<SVGSVGElement>(null)
+  const viewTransformRef = useRef<SVGGElement>(null)
+  const zoomReadoutRef = useRef<HTMLSpanElement>(null)
   const personNodeRefs = useRef(new Map<string, SVGGElement>())
   const keyboardNavigationMode = useRef(false)
   const stageRef = useRef<HTMLDivElement>(null)
@@ -193,6 +199,58 @@ function App() {
   const previousSelectedId = useRef(selectedId)
   const suppressClick = useRef(false)
   const manualDateFields = useRef(new WeakSet<HTMLInputElement>())
+
+  const cancelViewFrame = useCallback(() => {
+    if (viewFrame.current === null) return
+    if (typeof window.cancelAnimationFrame === 'function') window.cancelAnimationFrame(viewFrame.current)
+    else window.clearTimeout(viewFrame.current)
+    viewFrame.current = null
+  }, [])
+  const updateView = useCallback((nextView: View | ((current: View) => View)) => {
+    const next = typeof nextView === 'function' ? nextView(viewRef.current) : nextView
+    viewRef.current = next
+    cancelViewFrame()
+    pendingView.current = null
+    if (wheelCommitTimer.current !== null) {
+      window.clearTimeout(wheelCommitTimer.current)
+      wheelCommitTimer.current = null
+    }
+    setView(next)
+  }, [cancelViewFrame])
+
+  const previewView = useCallback((nextView: View | ((current: View) => View)) => {
+    const next = typeof nextView === 'function' ? nextView(viewRef.current) : nextView
+    viewRef.current = next
+    pendingView.current = next
+    if (viewFrame.current !== null) return
+    const commit = () => {
+      viewFrame.current = null
+      const pending = pendingView.current
+      if (!pending) return
+      viewTransformRef.current?.setAttribute('transform',
+        `translate(${pending.x} ${pending.y}) scale(${pending.scale})`)
+      if (zoomReadoutRef.current) zoomReadoutRef.current.textContent = `${Math.round(pending.scale * 100)}%`
+    }
+    viewFrame.current = typeof window.requestAnimationFrame === 'function'
+      ? window.requestAnimationFrame(commit)
+      : window.setTimeout(commit, 16)
+  }, [])
+
+  const commitView = useCallback(() => {
+    cancelViewFrame()
+    if (wheelCommitTimer.current !== null) {
+      window.clearTimeout(wheelCommitTimer.current)
+      wheelCommitTimer.current = null
+    }
+    const pending = pendingView.current
+    pendingView.current = null
+    if (pending) setView(pending)
+  }, [cancelViewFrame])
+
+  useEffect(() => () => {
+    cancelViewFrame()
+    if (wheelCommitTimer.current !== null) window.clearTimeout(wheelCommitTimer.current)
+  }, [cancelViewFrame])
 
   useEffect(() => {
     const markKeyboardNavigation = (event: KeyboardEvent) => {
@@ -258,6 +316,7 @@ function App() {
     const searchMatch = `${person.firstName} ${person.lastName}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())
     return searchMatch && (generation === 'all' || String(generations.get(person.id) ?? 0) === generation)
   }), [archive.people, generation, generations, query])
+  const filteredPersonIds = useMemo(() => new Set(filtered.map(({ id }) => id)), [filtered])
   const filteredPhotos = useMemo(() => filtered.filter((person) => person.photo), [filtered])
   const visiblePhotoIds = useMemo(() => {
     const visible = new Set<string>()
@@ -275,7 +334,6 @@ function App() {
     }
     return visible
   }, [filteredPhotos, positions, treeStageSize, view])
-  const visiblePersonIds = new Set(filtered.map(({ id }) => id))
   const relatedIds = new Set(selected ? archive.relationships
     .filter((relationship) => relationship.from === selected.id || relationship.to === selected.id)
     .flatMap((relationship) => [relationship.from, relationship.to]) : [])
@@ -284,6 +342,24 @@ function App() {
   const descendantBusYByPerson = useMemo(() => new Map(
     familyConnectors.flatMap((route) => route.childIds.map((id) => [id, route.childrenBusY] as const)),
   ), [familyConnectors])
+  const unionConnectors = useMemo(() => archive.relationships
+    .filter(isUnionRelationship)
+    .flatMap((relationship) => {
+      const from = positions.get(relationship.from)
+      const to = positions.get(relationship.to)
+      if (!from || !to || !filteredPersonIds.has(relationship.from) || !filteredPersonIds.has(relationship.to)) return []
+      const geometry = partnerConnectorGeometry(
+        relationship.from, relationship.to, positions, filteredPersonIds, descendantBusYByPerson,
+      )
+      const union = unionDetails(relationship)
+      return [{
+        relationship,
+        ...geometry,
+        ended: union?.status === 'ended',
+        brokenHeart: union?.status === 'ended' &&
+          ['divorce', 'annulment', 'separation', 'other'].includes(union.endReason ?? ''),
+      }]
+    }), [archive.relationships, descendantBusYByPerson, filteredPersonIds, positions])
 
   const relationshipEntries = (personId: string, type: RelationshipType, direction?: 'in' | 'out') => archive.relationships
     .filter((relationship) => (type === 'union'
@@ -369,7 +445,7 @@ function App() {
       const maxX = Math.max(...points.map(({ x }) => x))
       const minY = Math.min(...points.map(({ y }) => y))
       const maxY = Math.max(...points.map(({ y }) => y))
-      setView((current) => ({
+      updateView((current) => ({
         ...current,
         x: box.width / 2 - ((minX + maxX) / 2) * current.scale,
         y: box.height / 2 - ((minY + maxY) / 2) * current.scale,
@@ -378,7 +454,7 @@ function App() {
   }
 
   const resetView = () => {
-    setView({ x: 0, y: 0, scale: 1 })
+    updateView({ x: 0, y: 0, scale: 1 })
     centerTree(archive)
   }
 
@@ -396,7 +472,7 @@ function App() {
       const maxX = selectedPoint?.x ?? Math.max(...points.map(({ x }) => x))
       const minY = selectedPoint?.y ?? Math.min(...points.map(({ y }) => y))
       const maxY = selectedPoint?.y ?? Math.max(...points.map(({ y }) => y))
-      setView((current) => ({
+      updateView((current) => ({
         ...current,
         x: box.width / 2 - ((minX + maxX) / 2) * current.scale,
         y: box.height / 2 - ((minY + maxY) / 2) * current.scale,
@@ -413,7 +489,7 @@ function App() {
       window.removeEventListener('resize', center)
       document.removeEventListener('fullscreenchange', updateFullscreen)
     }
-  }, [positions, selectedId])
+  }, [positions, selectedId, updateView])
 
   const toggleTreeFullscreen = async () => {
     const treeArea = treeAreaRef.current
@@ -458,7 +534,7 @@ function App() {
     const factor = event.deltaY < 0 ? 1.1 : 0.9
     const px = event.clientX - rect.left
     const py = event.clientY - rect.top
-    setView((current) => {
+    previewView((current) => {
       const scale = Math.max(0.4, Math.min(2.2, current.scale * factor))
       return {
         x: px - (px - current.x) * (scale / current.scale),
@@ -466,7 +542,9 @@ function App() {
         scale,
       }
     })
-  }, [])
+    if (wheelCommitTimer.current !== null) window.clearTimeout(wheelCommitTimer.current)
+    wheelCommitTimer.current = window.setTimeout(commitView, 120)
+  }, [commitView, previewView])
 
   useEffect(() => {
     const stage = stageRef.current
@@ -507,14 +585,14 @@ function App() {
       const centerY = (first!.y + second!.y) / 2
       pinch.current = {
         distance: Math.hypot(first!.x - second!.x, first!.y - second!.y),
-        scale: view.scale,
-        worldX: (centerX - view.x) / view.scale,
-        worldY: (centerY - view.y) / view.scale,
+        scale: viewRef.current.scale,
+        worldX: (centerX - viewRef.current.x) / viewRef.current.scale,
+        worldY: (centerY - viewRef.current.y) / viewRef.current.scale,
       }
       drag.current = null
       return
     }
-    drag.current = { x: event.clientX, y: event.clientY, viewX: view.x, viewY: view.y }
+    drag.current = { x: event.clientX, y: event.clientY, viewX: viewRef.current.x, viewY: viewRef.current.y }
   }
   const moveDrag = (event: PointerEvent<SVGSVGElement>) => {
     if (pointers.current.has(event.pointerId)) {
@@ -527,14 +605,14 @@ function App() {
       const centerY = (first!.y + second!.y) / 2
       const distance = Math.hypot(first!.x - second!.x, first!.y - second!.y)
       const scale = Math.max(0.4, Math.min(2.2, pinch.current.scale * distance / pinch.current.distance))
-      setView({ x: centerX - pinch.current.worldX * scale, y: centerY - pinch.current.worldY * scale, scale })
+      previewView({ x: centerX - pinch.current.worldX * scale, y: centerY - pinch.current.worldY * scale, scale })
       return
     }
     const currentDrag = drag.current
     if (!currentDrag) return
     if (Math.hypot(event.clientX - currentDrag.x, event.clientY - currentDrag.y) <= 4) return
     suppressClick.current = true
-    setView((current) => ({
+    previewView((current) => ({
       ...current,
       x: currentDrag.viewX + event.clientX - currentDrag.x,
       y: currentDrag.viewY + event.clientY - currentDrag.y,
@@ -544,10 +622,13 @@ function App() {
     pointers.current.delete(event.pointerId)
     pinch.current = null
     drag.current = null
+    commitView()
     if (pointers.current.size === 1) {
       const [point] = [...pointers.current.values()]
       const rect = event.currentTarget.getBoundingClientRect()
-      if (point) drag.current = { x: point.x + rect.left, y: point.y + rect.top, viewX: view.x, viewY: view.y }
+      if (point) drag.current = {
+        x: point.x + rect.left, y: point.y + rect.top, viewX: viewRef.current.x, viewY: viewRef.current.y,
+      }
     }
     window.setTimeout(() => { suppressClick.current = false }, 250)
   }
@@ -623,7 +704,7 @@ function App() {
                 const maxX = Math.max(...points.map(({ x }) => x))
                 const minY = Math.min(...points.map(({ y }) => y))
                 const maxY = Math.max(...points.map(({ y }) => y))
-                setView((current) => ({
+                updateView((current) => ({
                   ...current,
                   x: box.width / 2 - ((minX + maxX) / 2) * current.scale,
                   y: box.height / 2 - ((minY + maxY) / 2) * current.scale,
@@ -654,7 +735,7 @@ function App() {
     }
     void loadPublishedArchive()
     return () => controller.abort()
-  }, [])
+  }, [updateView])
 
   const cancelModal = useCallback(() => {
     setModal(null)
@@ -788,7 +869,7 @@ function App() {
     window.setTimeout(() => {
       const point = treePositions(next).get(person.id)
       const box = canvasRef.current?.getBoundingClientRect()
-      if (point && box) setView((current) => ({
+      if (point && box) updateView((current) => ({
         ...current,
         x: box.width / 2 - point.x * current.scale,
         y: box.height / 2 - point.y * current.scale,
@@ -1137,10 +1218,10 @@ function App() {
                   setSelectingKinshipPerson(false)
                   setSelectedId(null)
                 }}>
-                <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
+                <g ref={viewTransformRef} transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
                   {familyConnectors.map((route) => {
                     const { key, parentIds, childIds } = route
-                    if (![...parentIds, ...childIds].every((id) => filtered.some((person) => person.id === id))) return null
+                    if (![...parentIds, ...childIds].every((id) => filteredPersonIds.has(id))) return null
                     const parentPoints = parentIds.map((id) => positions.get(id)).filter((point) => point !== undefined)
                     const childPoints = childIds.map((id) => positions.get(id)).filter((point) => point !== undefined)
                     if (parentPoints.length === 0 || childPoints.length === 0) return null
@@ -1153,17 +1234,8 @@ function App() {
                       <path className="family-line-bridge" d={`M ${x - 6} ${y} Q ${x} ${y - 12} ${x + 6} ${y}`} />
                     </g>
                   ))}
-                  {archive.relationships.filter(isUnionRelationship).map((relationship) => {
-                    const from = positions.get(relationship.from)
-                    const to = positions.get(relationship.to)
-                    if (!from || !to || !filtered.some((p) => p.id === relationship.from) || !filtered.some((p) => p.id === relationship.to)) return null
-                    const { path, heartX, heartY } = partnerConnectorGeometry(
-                      relationship.from, relationship.to, positions, visiblePersonIds, descendantBusYByPerson,
-                    )
-                    const union = unionDetails(relationship)
-                    const brokenHeart = union?.status === 'ended' &&
-                      ['divorce', 'annulment', 'separation', 'other'].includes(union.endReason ?? '')
-                    return <g key={relationship.id} className={union?.status === 'ended' ? 'ended-union' : ''}>
+                  {unionConnectors.map(({ relationship, path, heartX, heartY, ended, brokenHeart }) => (
+                    <g key={relationship.id} className={ended ? 'ended-union' : ''}>
                       <path className="partner-line" d={path} />
                       {brokenHeart
                         ? <HeartCrack className="partner-heart partner-heart-broken" aria-hidden="true"
@@ -1171,7 +1243,7 @@ function App() {
                         : <Heart className="partner-heart" aria-hidden="true"
                           x={heartX - 6} y={heartY - 6} size={12} />}
                     </g>
-                  })}
+                  ))}
                   {filtered.map((person) => {
                     const point = positions.get(person.id)!
                     const active = selectedId === person.id
@@ -1284,9 +1356,9 @@ function App() {
               </div>}
               <div className="canvas-hint"><MousePointer2 size={14} /> {t('treeGestureHint')}</div>
               <div className="zoom-controls">
-                <button aria-label={t('zoomIn')} title={t('zoomIn')} onClick={() => setView((v) => ({ ...v, scale: Math.min(2.2, v.scale * 1.15) }))}><Plus size={17} /></button>
-                <span>{Math.round(view.scale * 100)}%</span>
-                <button aria-label={t('zoomOut')} title={t('zoomOut')} onClick={() => setView((v) => ({ ...v, scale: Math.max(0.4, v.scale / 1.15) }))}><Minus size={17} /></button>
+                <button aria-label={t('zoomIn')} title={t('zoomIn')} onClick={() => updateView((v) => ({ ...v, scale: Math.min(2.2, v.scale * 1.15) }))}><Plus size={17} /></button>
+                <span ref={zoomReadoutRef}>{Math.round(view.scale * 100)}%</span>
+                <button aria-label={t('zoomOut')} title={t('zoomOut')} onClick={() => updateView((v) => ({ ...v, scale: Math.max(0.4, v.scale / 1.15) }))}><Minus size={17} /></button>
                 <i />
                 <button aria-label={t('resetView')} title={t('resetView')} onClick={resetView}><Maximize2 size={16} /></button>
                 <i />

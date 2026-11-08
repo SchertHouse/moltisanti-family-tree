@@ -724,6 +724,8 @@ describe('family tree interface', () => {
     const canvas = screen.getByRole('group', { name: /Moltisanti Family Tree/ })
     const treeNode = canvas.querySelector('.person-node')
     if (!treeNode) throw new Error('The family tree node is not available.')
+    const viewGroup = canvas.querySelector('g')
+    const transformBeforePinch = viewGroup?.getAttribute('transform')
     const dispatchTouch = (target: Element, type: string, pointerId: number, clientX: number, clientY: number) => {
       const event = createEvent(type, target, { bubbles: true, cancelable: true })
       Object.defineProperties(event, {
@@ -738,13 +740,14 @@ describe('family tree interface', () => {
     dispatchTouch(treeNode, 'pointerdown', 1, 100, 100)
     dispatchTouch(treeNode, 'pointerdown', 2, 120, 100)
     dispatchTouch(canvas, 'pointermove', 2, 140, 100)
-    expect(screen.getByText('200%')).toBeInTheDocument()
+    expect(await screen.findByText('200%')).toBeInTheDocument()
+    expect(viewGroup?.getAttribute('transform')).not.toBe(transformBeforePinch)
     dispatchTouch(canvas, 'pointerup', 1, 100, 100)
     dispatchTouch(canvas, 'pointerup', 2, 140, 100)
 
     const wheelEvent = new WheelEvent('wheel', { deltaY: 100, cancelable: true, bubbles: true })
     act(() => canvas.dispatchEvent(wheelEvent))
     expect(wheelEvent.defaultPrevented).toBe(true)
-    expect(screen.getByText('180%')).toBeInTheDocument()
+    expect(await screen.findByText('180%')).toBeInTheDocument()
   }, 10_000)
 })

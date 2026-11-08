@@ -87,12 +87,12 @@ h1 { font: 800 30px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; letter-spacin
 .person-node { cursor: pointer; transition: opacity .15s; }
 .person-node:focus { outline: none; }
 .person-node.keyboard-focused { outline: 3px solid #c8834e; outline-offset: 3px; }
-.person-node rect { fill: #fff; stroke: #e8e8e1; stroke-width: 1.4; filter: drop-shadow(0 5px 8px rgba(39,56,40,.08)); }
+.person-node rect { fill: #fff; stroke: #e8e8e1; stroke-width: 1.4; }
 .person-node:hover rect { stroke: #9caf98; }
 .person-node.selected rect { stroke: #5b805f; stroke-width: 2.5; }
 .person-node.dimmed { opacity: .36; }
 .node-edit-button { cursor: pointer; color: #416c51; }
-.node-edit-button circle { fill: #fffefa; stroke: #dce5d8; stroke-width: 1.2; filter: drop-shadow(0 2px 3px rgba(39,56,40,.16)); }
+.node-edit-button circle { fill: #fffefa; stroke: #dce5d8; stroke-width: 1.2; }
 .node-edit-button:hover circle, .node-edit-button:focus circle { fill: #e8efe8; stroke: #769274; }
 .node-avatar { fill: #e9efe5; }
 .avatar-initial { font: 700 11px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; fill: #547353; }

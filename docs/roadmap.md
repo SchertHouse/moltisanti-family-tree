@@ -33,6 +33,7 @@ Stato verificato per l'implementazione corrente; non sostituisce l'esecuzione de
 - [x] Navigazione spaziale tra i nodi con le frecce e indicatore di focus da tastiera distinto dalla selezione tramite puntatore.
 - [x] Ricaricare le immagini visibili nell'albero dopo aver svuotato la cache delle varianti.
 - [x] Caricare automaticamente on demand le foto dei nodi visibili nell'albero calcolando l'intersezione con la viewport dopo pan/zoom e ridimensionamento, senza dipendere dalle notifiche di intersezione SVG dei browser.
+- [x] Aggiornare pan/zoom direttamente sulla trasformazione SVG una volta per frame, sincronizzare lo stato React al termine della gesture e rimuovere i filtri drop-shadow dai nodi; memorizzare i percorsi delle unioni per layout/filtro senza ridurre gli elementi SVG renderizzati.
 - [x] Completare il caricamento delle foto nell'albero e nel dettaglio anche quando React StrictMode ripete il ciclo degli effetti in sviluppo, evitando spinner persistenti.
 - [x] Inserire automaticamente i separatori nelle date digitando soltanto le cifre, mantenendo il supporto alle date parziali di solo anno.
 - [x] Riepilogo compleanno per date complete e mese noto (`YYYY-MM`), senza inventare un giorno; il solo anno non produce un promemoria. Il 29 febbraio ricorre al successivo anno bisestile.
