@@ -324,6 +324,34 @@ describe('family tree layout', () => {
     expect(positions.get('child-b')!.x).toBeLessThan(positions.get('child-a')!.x)
   })
 
+  it('orders spouses to follow their parent branches when names imply the opposite order', () => {
+    const archive = emptyArchive()
+    archive.people = [
+      { id: 'parent-left', firstName: 'Ada', lastName: 'Family' },
+      { id: 'parent-right', firstName: 'Bea', lastName: 'Family' },
+      { id: 'spouse-from-left', firstName: 'Zoe', lastName: 'Family' },
+      { id: 'spouse-from-right', firstName: 'Cora', lastName: 'Family' },
+    ]
+    archive.relationships = [
+      { id: 'left-parent-child', type: 'parent-child', from: 'parent-left', to: 'spouse-from-left' },
+      { id: 'right-parent-child', type: 'parent-child', from: 'parent-right', to: 'spouse-from-right' },
+      {
+        id: 'spouses',
+        type: 'union',
+        from: 'spouse-from-left',
+        to: 'spouse-from-right',
+        unionKind: 'marriage',
+        unionStatus: 'current',
+      },
+    ]
+
+    const positions = treePositions(archive)
+    const parentDirection = positions.get('parent-left')!.x - positions.get('parent-right')!.x
+    const spouseDirection = positions.get('spouse-from-left')!.x - positions.get('spouse-from-right')!.x
+
+    expect(parentDirection * spouseDirection).toBeGreaterThan(0)
+  })
+
   it('keeps children of the same parents together in their generation', () => {
     const archive = emptyArchive()
     archive.people = [

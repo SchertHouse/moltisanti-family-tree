@@ -17,6 +17,7 @@ Stato verificato per l'implementazione corrente; non sostituisce l'esecuzione de
 - [x] Mantenere contigui nel layout i fratelli con lo stesso insieme di genitori e quelli che condividono almeno un genitore anche con co-genitori diversi; centrare il genitore condiviso, disporre i co-genitori all'esterno, sfalsare le uscite, innestare i tronchi sui bus senza inversioni, ordinare i figli per endpoint, instradare su corsie distinte i bus sovrapposti, marcare gli incroci inevitabili con ponti grafici e collegare i nuclei con un solo figlio tramite una discesa verticale, prolungando il bus con un solo angolo quando necessario.
 - [x] Deviare con una curva cubica le linee delle unioni che altrimenti passerebbero dietro le schede di altre persone, con tangenti a 45° dagli angoli e senza spigoli; posizionare il cuore sul percorso e mantenere il bus dei discendenti distanziato 20 unità dalle schede.
 - [x] Convergenza iterativa di ordinamento e posizioni, con passaggi direzionali e test di allineamento per famiglie ramificate.
+- [x] Ordinare i coniugi in base alla posizione dei rispettivi genitori quando entrambi provengono da rami distinti, riducendo gli incroci delle discendenze.
 - [x] Selezione ricercabile e navigabile da tastiera della persona nel modulo per aggiungere legami.
 - [x] Prima interfaccia responsive per consultazione, ricerca, gestione locale e relazioni.
 - [x] Visualizzazione fullscreen dell'area dell'albero con uscita tramite pulsante o tasto Escape.

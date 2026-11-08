@@ -284,6 +284,17 @@ export function birthdayInfo(date: string | undefined, today = new Date()): Birt
 }
 
 export function treePositions(archive: FamilyArchive): Map<string, { x: number; y: number }> {
+  const positions = calculateTreePositions(archive)
+  const partnerOrderOverrides = partnerOrdersFromParentPositions(archive, positions)
+  return partnerOrderOverrides.size
+    ? calculateTreePositions(archive, partnerOrderOverrides)
+    : positions
+}
+
+function calculateTreePositions(
+  archive: FamilyArchive,
+  partnerOrderOverrides = new Map<string, string[]>(),
+): Map<string, { x: number; y: number }> {
   const generations = generationMap(archive)
   const partnerMap = partnerGroups(archive)
   const familyGroups = new Map<string, Person[]>()
@@ -312,7 +323,10 @@ export function treePositions(archive: FamilyArchive): Map<string, { x: number; 
 
   const groups = [...familyGroups].map(([id, people]) => ({
     id,
-    people: orderPartnerGroup(people, coParentsByParent),
+    people: applyPartnerOrderOverride(
+      orderPartnerGroup(people, coParentsByParent),
+      partnerOrderOverrides.get(id),
+    ),
     level: generations.get(people[0]!.id) ?? 0,
   }))
   const layoutGroupById = new Map(groups.map((group) => [group.id, group]))
@@ -412,6 +426,60 @@ export function treePositions(archive: FamilyArchive): Map<string, { x: number; 
     }
   }
   return positions
+}
+
+function partnerOrdersFromParentPositions(
+  archive: FamilyArchive,
+  positions: Map<string, { x: number; y: number }>,
+): Map<string, string[]> {
+  const partnerMap = partnerGroups(archive)
+  const peopleByGroup = new Map<string, Person[]>()
+  for (const person of archive.people) {
+    const groupId = partnerMap.find(person.id)
+    peopleByGroup.set(groupId, [...(peopleByGroup.get(groupId) ?? []), person])
+  }
+  const parentsByPerson = new Map<string, Set<string>>()
+  for (const relationship of archive.relationships) {
+    if (relationship.type !== 'parent-child') continue
+    const parents = parentsByPerson.get(relationship.to) ?? new Set<string>()
+    parents.add(relationship.from)
+    parentsByPerson.set(relationship.to, parents)
+  }
+
+  const parentCenter = (personId: string): number | null => {
+    const parentPositions = [...(parentsByPerson.get(personId) ?? [])]
+      .map((parentId) => positions.get(parentId)?.x)
+      .filter((x): x is number => x !== undefined)
+    return parentPositions.length
+      ? parentPositions.reduce((sum, x) => sum + x, 0) / parentPositions.length
+      : null
+  }
+
+  const overrides = new Map<string, string[]>()
+  for (const [groupId, people] of peopleByGroup) {
+    if (people.length !== 2) continue
+    const firstParentCenter = parentCenter(people[0]!.id)
+    const secondParentCenter = parentCenter(people[1]!.id)
+    if (firstParentCenter === null || secondParentCenter === null ||
+      Math.abs(firstParentCenter - secondParentCenter) < 0.01) continue
+
+    const currentOrder = [...people].sort((a, b) =>
+      positions.get(a.id)!.x - positions.get(b.id)!.x)
+    const desiredOrder = firstParentCenter < secondParentCenter ? people : [...people].reverse()
+    if (currentOrder[0]!.id !== desiredOrder[0]!.id) {
+      overrides.set(groupId, desiredOrder.map((person) => person.id))
+    }
+  }
+  return overrides
+}
+
+function applyPartnerOrderOverride(people: Person[], order?: string[]): Person[] {
+  if (!order) return people
+  const peopleById = new Map(people.map((person) => [person.id, person]))
+  const ordered = order.map((personId) => peopleById.get(personId))
+  return ordered.length === people.length && ordered.every((person) => person !== undefined)
+    ? ordered.filter((person): person is Person => person !== undefined)
+    : people
 }
 
 export interface FamilyConnectorRoute {
