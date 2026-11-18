@@ -6,4 +6,6 @@ Le etichette dei campi opzionali persona (nome alternativo, sesso alla nascita e
 
 Il controllo per ingrandire la foto nella scheda di dettaglio e il titolo accessibile della relativa anteprima sono localizzati in `it`, `en` ed `eo`.
 
+I comandi Admin di import/export CSV, l'avviso sull'export in chiaro e il riepilogo del merge per ID sono tradotti nelle tre lingue.
+
 Il calcolo del percorso di parentela nella scheda persona usa testi localizzati per la ricerca, i legami attraversati, i rapporti di affinità tramite unioni registrate, i collegamenti indiretti e l'assenza di un percorso registrato. Il selettore “Confronta con” include un controllo localizzato e accessibile per cancellare la persona selezionata e il relativo risultato.

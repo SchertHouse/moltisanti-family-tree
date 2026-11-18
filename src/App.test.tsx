@@ -3,6 +3,7 @@ import { act, cleanup, createEvent, fireEvent, render, screen, waitFor, within }
 import { unzipSync } from 'fflate'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { exportArchiveCsv } from './csv'
 import * as cryptoModule from './crypto'
 import * as githubModule from './github'
 import * as gedzipModule from './gedzip'
@@ -190,6 +191,61 @@ describe('family tree interface', () => {
     const zip = unzipSync(new Uint8Array(await blob.arrayBuffer()))
     expect(Object.keys(zip)).toEqual(['gedcom.ged'])
     expect(new TextDecoder().decode(zip['gedcom.ged'])).toContain('2 VERS 7.0')
+  })
+
+  it('imports CSV records by ID after review without deleting absent records or blank fields', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const current: FamilyArchive = {
+      schemaVersion: 1,
+      people: [{ id: 'person-1', firstName: 'Ada', lastName: 'Lovelace', email: 'ada@example.test' }],
+      relationships: [],
+    }
+    vi.spyOn(cryptoModule, 'decryptArchive').mockResolvedValue(current)
+    await saveRememberedPassphrase('csv import test key')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ format: 'test-envelope' }))))
+    render(<App />)
+
+    await screen.findByRole('button', { name: 'Ada Lovelace' })
+    fireEvent.click(screen.getByRole('button', { name: 'Admin' }))
+    fireEvent.change(screen.getByLabelText('Local Admin password'), { target: { value: 'moltisantitree' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    const csv = exportArchiveCsv({
+      schemaVersion: 1,
+      people: [
+        { id: 'person-1', firstName: 'Augusta Ada', lastName: 'Lovelace', email: '' },
+        { id: 'person-2', firstName: 'Grace', lastName: 'Hopper' },
+      ],
+      relationships: [{ id: 'relation-1', type: 'parent-child', from: 'person-1', to: 'person-2' }],
+    })
+    const file = new File([csv], 'updates.csv', { type: 'text/csv' })
+    fireEvent.change(screen.getByLabelText('Import CSV'), { target: { files: [file] } })
+
+    const dialog = await screen.findByRole('dialog', { name: 'CSV merge preview' })
+    expect(dialog).toHaveTextContent('People added: 1; updated: 1.')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Apply merge' }))
+
+    expect(await screen.findByRole('button', { name: 'Augusta Ada Lovelace' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Grace Hopper' })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('CSV merge applied: 1 people and 1 relationships added; 1 people and 0 relationships updated.')
+  })
+
+  it('requires explicit confirmation before exporting the archive as plaintext CSV', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 404 })))
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Admin' }))
+    fireEvent.change(screen.getByLabelText('Local Admin password'), { target: { value: 'moltisantitree' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+    confirmSpy.mockReturnValue(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+
+    expect(confirmSpy).toHaveBeenLastCalledWith(
+      'The CSV contains unencrypted personal data and contacts. It is not encrypted; keep it secure. Continue?',
+    )
+    expect(createObjectURL).not.toHaveBeenCalled()
   })
 
   it('shows the loading spinner only on the export button in use', async () => {

@@ -6,6 +6,7 @@ Stato verificato per l'implementazione corrente; non sostituisce l'esecuzione de
 
 - [x] Scaffold SPA React/Vite con TypeScript strict e CI GitHub Pages.
 - [x] Modello versione 1, validazione, archivio AES-256-GCM/PBKDF2, import con riepilogo ed export JSON cifrato/in chiaro e GEDZIP 7.0 con foto/gallerie in chiaro, passphrase ove necessaria e conferma.
+- [x] Import/export CSV locale versionato in modalità Admin: persone e relazioni referenziate da ID stabile, senza foto profilo o gallerie, conferma per export in chiaro, anteprima e merge per ID con celle vuote e record assenti preservati.
 - [x] Caricamento automatico dell'archivio cifrato pubblicato nel percorso previsto e controllo degli asset in build.
 - [x] Ricordo facoltativo della passphrase cifrata in IndexedDB con chiave non esportabile, apertura automatica, fallback manuale e rimozione.
 - [x] Pubblicazione GitHub Contents dell'archivio cifrato singolo con SHA per aggiornamento e segnalazione conflitti; riuso della chiave attiva o cifratura con nuova passphrase.
@@ -50,4 +51,4 @@ Stato verificato per l'implementazione corrente; non sostituisce l'esecuzione de
 
 ## Limitazioni
 
-Base iniziale senza dati demo per non rischiare di distribuire dati personali. Non sono pianificati un formato generico ZIP con anteprima differenze d'importazione né un'interfaccia per gestire gallerie fotografiche: l'import e l'export ordinari restano JSON, insieme all'export GEDZIP già disponibile. La CI esegue la matrice browser; la verifica touch su hardware fisico resta manuale. L'API Contents pubblica un singolo archivio e non fornisce transazioni.
+Base iniziale senza dati demo per non rischiare di distribuire dati personali. Non sono pianificati un formato generico ZIP né un'interfaccia per gestire gallerie fotografiche. Il CSV non scambia fotografie. La CI esegue la matrice browser; la verifica touch su hardware fisico resta manuale. L'API Contents pubblica un singolo archivio e non fornisce transazioni.

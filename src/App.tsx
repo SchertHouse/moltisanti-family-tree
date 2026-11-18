@@ -8,6 +8,7 @@ import {
   decryptArchive, decryptArchivePhotos, encryptPreparedArchive, isEncryptedImage,
   type EncryptedArchive, prepareArchivePhotos,
 } from './crypto'
+import { exportArchiveCsv, importArchiveCsv, type CsvImportPreview } from './csv'
 import { publishEncryptedArchive } from './github'
 import ImageCropDialog from './ImageCropDialog'
 import imageConfig from '../image-config.json'
@@ -33,9 +34,9 @@ const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'moltisantitree'
 const archivePath = 'public/family-archive.enc.json'
 const photoTypes = imageConfig.input.mimeTypes
 
-type Modal = 'admin' | 'key' | 'person' | 'relationship' | 'publish' | 'import-review' | 'photo-preview' | null
+type Modal = 'admin' | 'key' | 'person' | 'relationship' | 'publish' | 'import-review' | 'csv-import-review' | 'photo-preview' | null
 type View = { x: number; y: number; scale: number }
-type BusyAction = 'saving' | 'publishing' | 'exporting-json' | 'exporting-gedzip' | 'opening' | 'importing' | null
+type BusyAction = 'saving' | 'publishing' | 'exporting-json' | 'exporting-csv' | 'exporting-gedzip' | 'opening' | 'importing' | null
 
 const kinshipDirectLabels: Record<KinshipDirectRole, Record<KinshipSex, TranslationKey>> = {
   parent: { male: 'kinshipFather', female: 'kinshipMother', unspecified: 'kinshipParent' },
@@ -156,6 +157,7 @@ function App() {
   const [publishNewKey, setPublishNewKey] = useState(false)
   const [pendingEnvelope, setPendingEnvelope] = useState<unknown>(null)
   const [pendingArchive, setPendingArchive] = useState<FamilyArchive | null>(null)
+  const [pendingCsvImport, setPendingCsvImport] = useState<CsvImportPreview | null>(null)
   const [pendingPassphrase, setPendingPassphrase] = useState('')
   const [editing, setEditing] = useState<Person | null>(null)
   const [relationshipPersonId, setRelationshipPersonId] = useState('')
@@ -393,6 +395,21 @@ function App() {
       setBusyAction(null)
     }
   }
+  const selectCsvArchive = async (file: File | undefined, input: HTMLInputElement) => {
+    if (!file) return
+    setBusyAction('importing')
+    try {
+      if (file.size > 25 * 1024 * 1024) throw new Error(t('csvTooLarge'))
+      const preview = importArchiveCsv(archive, await file.text())
+      setPendingCsvImport(preview)
+      setModal('csv-import-review')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : t('csvImportFailure'))
+    } finally {
+      input.value = ''
+      setBusyAction(null)
+    }
+  }
   const choosePhoto = (file: File | undefined, input: HTMLInputElement) => {
     if (!file) return
     input.value = ''
@@ -413,6 +430,20 @@ function App() {
       const plaintext = await decryptArchivePhotos(archive, passphrase)
       download(JSON.stringify(plaintext, null, 2), 'family-archive.json')
       setNotice(t('plainExported'))
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : t('exportFailure'))
+    } finally {
+      setBusyAction(null)
+    }
+  }
+  const exportCsvArchive = async () => {
+    if (!window.confirm(t('csvExportWarning'))) return
+    setBusyAction('exporting-csv')
+    try {
+      const csv = exportArchiveCsv(archive)
+      if (new Blob([csv]).size > 25 * 1024 * 1024) throw new Error(t('csvTooLarge'))
+      download(csv, 'family-archive.csv', 'text/csv;charset=utf-8')
+      setNotice(t('csvExported'))
     } catch (error) {
       setNotice(error instanceof Error ? error.message : t('exportFailure'))
     } finally {
@@ -649,6 +680,7 @@ function App() {
     setPassphrase('')
     setPendingPassphrase('')
     setPendingArchive(null)
+    setPendingCsvImport(null)
     setModal(null)
   }
 
@@ -658,6 +690,7 @@ function App() {
     setSelectingKinshipPerson(false)
     setSelectedId(null)
     setPendingArchive(null)
+    setPendingCsvImport(null)
     setPendingPassphrase('')
     setPendingEnvelope(null)
     setModal(null)
@@ -693,6 +726,7 @@ function App() {
               setSelectedId(null)
               setPendingEnvelope(null)
               setPendingArchive(null)
+              setPendingCsvImport(null)
               setPendingPassphrase('')
               setModal(null)
               setNotice('')
@@ -740,6 +774,7 @@ function App() {
   const cancelModal = useCallback(() => {
     setModal(null)
     setPendingArchive(null)
+    setPendingCsvImport(null)
     setPendingPassphrase('')
     setCroppedPhoto(null)
   }, [])
@@ -992,6 +1027,25 @@ function App() {
     const storageWarning = await persistPassphraseChoice(pendingPassphrase, rememberPassphrase)
     installArchive(pendingArchive, pendingPassphrase || undefined)
     if (storageWarning) setNotice(storageWarning)
+  }
+  const applyPendingCsvImport = () => {
+    if (!pendingCsvImport) return
+    try {
+      validateArchive(pendingCsvImport.archive)
+      setArchive(pendingCsvImport.archive)
+      setSelectedId(null)
+      setPendingCsvImport(null)
+      setModal(null)
+      setNotice(t('csvImportApplied', {
+        peopleAdded: pendingCsvImport.summary.peopleAdded,
+        peopleUpdated: pendingCsvImport.summary.peopleUpdated,
+        relationshipsAdded: pendingCsvImport.summary.relationshipsAdded,
+        relationshipsUpdated: pendingCsvImport.summary.relationshipsUpdated,
+      }))
+      centerTree(pendingCsvImport.archive)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : t('csvImportFailure'))
+    }
   }
   const selectArchiveFile = async (file: File | undefined, input: HTMLInputElement) => {
     if (!file) return
@@ -1499,6 +1553,17 @@ function App() {
       {admin && <section className="admin-dock">
         <div className="dock-title"><ShieldCheck size={18} /><span><strong>{t('adminMode')}</strong><small>{t('adminHint')}</small></span></div>
         <div className="dock-actions"><button className="button button-primary" disabled={busyAction !== null} onClick={() => beginKeyFlow('save')}><Download size={16} />{t('save')}</button>
+          <button className="button button-light" disabled={busyAction !== null} onClick={() => { void exportCsvArchive() }}>
+            {busyAction === 'exporting-csv' ? <LoaderCircle className="button-spinner" size={15} /> : <Download size={16} />}
+            {busyAction === 'exporting-csv' ? t('exportingArchive') : t('exportCsv')}
+          </button>
+          <label className={`button button-light ${busyAction === 'importing' ? 'is-busy' : ''}`}>
+            {busyAction === 'importing' ? <LoaderCircle className="button-spinner" size={15} /> : <Upload size={16} />}
+            {busyAction === 'importing' ? t('importingArchive') : t('importCsv')}
+            <input type="file" accept=".csv,text/csv" hidden disabled={busyAction !== null} onChange={(event) => {
+              void selectCsvArchive(event.currentTarget.files?.[0], event.currentTarget)
+            }} />
+          </label>
           <button className="button button-light" disabled={busyAction !== null} onClick={() => { void exportPlainArchive() }}>
             {busyAction === 'exporting-json' ? <LoaderCircle className="button-spinner" size={15} /> : <Download size={16} />}
             {busyAction === 'exporting-json' ? t('exportingArchive') : t('exportPlain')}
@@ -1539,6 +1604,17 @@ function App() {
             <div className="inline-warning"><ShieldCheck size={16} /> {t('importReplaceWarning')}</div>
             <div className="modal-actions"><button type="button" className="button button-light" onClick={cancelModal}>{t('cancel')}</button>
               <button type="button" className="button button-primary" onClick={() => void applyPendingImport()}>{t('applyImport')}</button></div>
+          </>}
+          {modal === 'csv-import-review' && pendingCsvImport && <><div className="modal-symbol"><FileLock2 size={23} /></div><h2 id="modal-title">{t('csvImportReview')}</h2>
+            <p>{t('csvImportSummary', {
+              peopleAdded: pendingCsvImport.summary.peopleAdded,
+              peopleUpdated: pendingCsvImport.summary.peopleUpdated,
+              relationshipsAdded: pendingCsvImport.summary.relationshipsAdded,
+              relationshipsUpdated: pendingCsvImport.summary.relationshipsUpdated,
+            })}</p>
+            <div className="inline-warning"><ShieldCheck size={16} /> {t('csvImportMergeWarning')}</div>
+            <div className="modal-actions"><button type="button" className="button button-light" onClick={cancelModal}>{t('cancel')}</button>
+              <button type="button" className="button button-primary" onClick={applyPendingCsvImport}>{t('applyCsvImport')}</button></div>
           </>}
           {modal === 'key' && <><div className="modal-symbol"><FileLock2 size={23} /></div><h2 id="modal-title">{keyPurpose === 'open' ? t('openArchive') : t('save')}</h2>
             <p>{keyPurpose === 'save' ? t('passphraseGuidance') : t('savedDataWarning')}</p>
